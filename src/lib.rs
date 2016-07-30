@@ -21,25 +21,36 @@ pub enum ConnectionMode {
   Passive,
 }
 
-
-struct Context {
-  dataMode: Option<DataMode>,
-  connectionMode: Option<ConnectionMode>,
-  working_dir: Option<String>,
+pub enum State {
+  Undefined,
+  LoginReady,
+  LoginSent,
+  PasswordReady,
+  PasswordSent,
+  Authorized,
 }
 
-pub enum Ftp {
-  StateUndefined { buffer: ByteBuffer },
-  StateLoginReady,
-  StateLoggedIn { buffer: ByteBuffer },
-  StatePasswordReady,
-  Error,
+impl fmt::Display for State {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    let state = match self {
+      &State::Undefined     => "undefined",
+      &State::LoginReady    => "login-ready",
+      &State::LoginSent     => "login-sent",
+      &State::PasswordReady => "password-ready",
+      &State::PasswordSent  => "password-sent",
+      &State::Authorized    => "authorized",
+    };
+    write!(f, "[state: {}]", state)
+  }
 }
+
 
 pub enum FtpError {
-  NotEnoughData(Ftp),
+  NotEnoughData,
   ProtocolError(String),
+  GargageData,
 }
+
 
 impl fmt::Debug for FtpError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -52,87 +63,119 @@ impl fmt::Debug for FtpError {
     }
 }
 
-
-impl Ftp {
-  pub fn new() -> Self {
-    Ftp::StateUndefined { buffer: ByteBuffer::new() }
-  }
-
-  pub fn feed(&mut self, data: &[u8]) {
-    match self {
-      &mut Ftp::StateUndefined { buffer: ref mut buffer } => buffer.write_bytes(data),
-      _ => unimplemented!(),
-    }
-  }
-
-  pub fn advance(mut self) -> Result<Ftp, FtpError> {
-    match self {
-      Ftp::StateUndefined { buffer: buffer } => {
-
-        lazy_static! {
-          static ref RE_RESPONCE_CODE: Regex = Regex::new("(?m:^(\\d{3}) .+$)").unwrap();
-          static ref RE_PARTRIAL_RESPONCE_CODE: Regex = Regex::new("(?m:^(\\d{3})-.+$)").unwrap();
-        }
-
-        str::from_utf8(buffer.to_bytes().as_slice())
-          .map_err(|err| FtpError::ProtocolError("gargabe".to_string()))
-          .and_then(|response|
-            RE_RESPONCE_CODE.captures(&response)
-              .ok_or_else(||{
-                if RE_PARTRIAL_RESPONCE_CODE.is_match(response) {
-                  FtpError::NotEnoughData(Ftp::StateUndefined { buffer: buffer})
-                } else {
-                  FtpError::ProtocolError("garbage".to_string())
-                }
-              })
-              .and_then(|captures| {
-                let code_str = captures.at(1).unwrap();
-                let code:u32 = code_str.parse().unwrap();
-                match code {
-                  LOGGED_EXPECTED   => Ok(Ftp::StateLoginReady),
-                  PASSWORD_EXPECTED => Ok(Ftp::StatePasswordReady),
-                  LOGGED_IN         => Ok(Ftp::StateLoggedIn { buffer: ByteBuffer::new() }),
-                  _ => unimplemented!(),
-                }
-              })
-          )
-      }
-      _ => unimplemented!(),
-    }
-  }
-
-  pub fn send_login(self, buffer: &mut ByteBuffer, login: &str)
-    -> Result<Ftp, FtpError> {
-    match self {
-      Ftp::StateLoginReady => {
-        buffer.write_bytes("USER ".as_bytes());
-        buffer.write_bytes(login.as_bytes());
-        buffer.write_bytes("\n".as_bytes());
-        Ok(Ftp::StateUndefined { buffer: ByteBuffer::new() })
-      },
-      _ => unimplemented!(),
-    }
-  }
-
-  pub fn send_password(self, buffer: &mut ByteBuffer, pass: &str)
-    -> Result<Ftp, FtpError> {
-    match self {
-      Ftp::StatePasswordReady => {
-        buffer.write_bytes("PASS ".as_bytes());
-        buffer.write_bytes(pass.as_bytes());
-        buffer.write_bytes("\n".as_bytes());
-        Ok(Ftp::StateUndefined { buffer: ByteBuffer::new() })
-      },
-      _ => unimplemented!(),
-    }
-  }
-
+pub struct Ftp {
+  dataMode: Option<DataMode>,
+  connectionMode: Option<ConnectionMode>,
+  working_dir: Option<String>,
+  buffer: ByteBuffer,
+  state: State,
 }
 
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
+
+
+impl Ftp {
+  pub fn new() -> Self {
+    Ftp {
+      dataMode : None,
+      connectionMode: None,
+      working_dir: None,
+      buffer: ByteBuffer::new(),
+      state: State::Undefined,
     }
+  }
+
+  pub fn feed(&mut self, data: &[u8]) {
+    self.buffer.write_bytes(data);
+  }
+
+  fn advance_state(prev_state: &State, bytes: &[u8]) -> Result<State, FtpError> {
+
+    lazy_static! {
+      static ref RE_RESPONCE_CODE: Regex = Regex::new("(?m:^(\\d{3}) .+$)").unwrap();
+      static ref RE_PARTRIAL_RESPONCE_CODE: Regex = Regex::new("(?m:^(\\d{3})-.+$)").unwrap();
+    }
+
+    str::from_utf8(bytes)
+      .map_err(|err| FtpError::GargageData)
+      .and_then(|response|
+        RE_RESPONCE_CODE.captures(&response)
+          .ok_or_else(||{
+            if RE_PARTRIAL_RESPONCE_CODE.is_match(response) {
+              FtpError::NotEnoughData
+            } else {
+              FtpError::GargageData
+            }
+          })
+          .and_then(|captures| {
+            let code_str = captures.at(1).unwrap();
+            let code:u32 = code_str.parse().unwrap();
+            match code {
+              LOGGED_EXPECTED   => Ok(State::LoginReady),
+              PASSWORD_EXPECTED => Ok(State::PasswordReady),
+              LOGGED_IN         => Ok(State::Authorized),
+              _ => unimplemented!(),
+            }
+          })
+      )
+      .and_then(|new_state|{
+        let allowed:bool = match (prev_state, &new_state) {
+          (&State::Undefined, &State::LoginReady)       => true,
+          (&State::LoginSent, &State::PasswordReady)    => true,
+          (&State::PasswordReady, &State::PasswordSent) => true,
+          (&State::PasswordSent, &State::Authorized) => true,
+          _ => false,
+        };
+        if allowed {
+          Ok(new_state)
+        } else {
+          println!("transition {} => {} is not allowed", prev_state, new_state);
+          Err(FtpError::ProtocolError("transition not allowed".to_string()))
+        }
+      })
+  }
+
+  pub fn advance(&mut self) -> Option<FtpError> {
+
+    lazy_static! {
+      static ref RE_RESPONCE_CODE: Regex = Regex::new("(?m:^(\\d{3}) .+$)").unwrap();
+      static ref RE_PARTRIAL_RESPONCE_CODE: Regex = Regex::new("(?m:^(\\d{3})-.+$)").unwrap();
+    }
+
+    let transition_result = Ftp::advance_state(&self.state, self.buffer.to_bytes().as_slice());
+
+    match transition_result {
+      Err(e)        => Some(e),
+      Ok(new_state) => {
+        self.buffer.clear();
+        self.state = new_state;
+        None
+      }
+    }
+  }
+
+  pub fn send_login(&mut self, buffer: &mut ByteBuffer, login: &str) {
+    match &self.state {
+      &State::LoginReady => {
+        buffer.write_bytes("USER ".as_bytes());
+        buffer.write_bytes(login.as_bytes());
+        buffer.write_bytes("\n".as_bytes());
+        self.state = State::LoginSent
+      },
+      _ => panic!("send_login is not allowed from the current state"),
+    }
+  }
+
+  pub fn send_password(&mut self, buffer: &mut ByteBuffer, pass: &str) {
+    match &self.state {
+      &State::PasswordReady => {
+        buffer.write_bytes("PASS ".as_bytes());
+        buffer.write_bytes(pass.as_bytes());
+        buffer.write_bytes("\n".as_bytes());
+        self.state = State::PasswordSent;
+      },
+      _ => panic!("send_password is not allowed from the current state"),
+    }
+  }
+
 }
