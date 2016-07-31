@@ -21,7 +21,6 @@ fn session_sample() {
   ftp.send_password(&mut output, "anonymous@nowhere.com");
   assert_eq!(str::from_utf8(output.to_bytes().as_slice()).unwrap(), "PASS anonymous@nowhere.com\n");
 
-
   output.clear();
   ftp.feed("230-\n".as_bytes());
   ftp.feed("230-This is ftp0.ydx.FreeBSD.org, graciously hosted by Yandex.\n".as_bytes());
@@ -30,4 +29,14 @@ fn session_sample() {
   ftp.feed("230-\n".as_bytes());
   ftp.feed("230 Login successful.\n".as_bytes());
   assert_eq!(ftp.advance().is_none(), true);
+
+  output.clear();
+  ftp.send_pwd_req(&mut output);
+  assert_eq!(str::from_utf8(output.to_bytes().as_slice()).unwrap(), "PWD\n");
+
+  ftp.feed("257 \"/\" is the current directory\n".as_bytes());
+  assert_eq!(ftp.advance().is_none(), true);
+  assert_eq!(ftp.get_wd(), "/");
+
+
 }

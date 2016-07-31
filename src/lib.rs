@@ -7,9 +7,10 @@ use regex::Regex;
 use std::str;
 use std::fmt;
 
-pub const LOGGED_EXPECTED:u32   = 220;
-pub const LOGGED_IN:u32         = 230;
-pub const PASSWORD_EXPECTED:u32 = 331;
+pub const LOGGED_EXPECTED:u32    = 220;
+pub const LOGGED_IN:u32          = 230;
+pub const PATHNAME_AVAILABLE:u32 = 257;
+pub const PASSWORD_EXPECTED:u32  = 331;
 
 pub enum DataMode {
   Binary,
@@ -22,25 +23,37 @@ pub enum ConnectionMode {
 }
 
 pub enum State {
-  Undefined,
+  NonAuthorized,
   LoginReady,
   LoginSent,
   PasswordReady,
   PasswordSent,
   Authorized,
+
+  PwdSent,
+  PathReceived(String),
 }
 
 impl fmt::Display for State {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    let state = match self {
-      &State::Undefined     => "undefined",
-      &State::LoginReady    => "login-ready",
-      &State::LoginSent     => "login-sent",
-      &State::PasswordReady => "password-ready",
-      &State::PasswordSent  => "password-sent",
-      &State::Authorized    => "authorized",
-    };
-    write!(f, "[state: {}]", state)
+    match self {
+      &State::PathReceived(ref value) => {
+        write!(f, "[state: path-received({})]", value)
+      }
+      _ => {
+        let state = match self {
+          &State::NonAuthorized => "non-authorized",
+          &State::LoginReady    => "login-ready",
+          &State::LoginSent     => "login-sent",
+          &State::PasswordReady => "password-ready",
+          &State::PasswordSent  => "password-sent",
+          &State::Authorized    => "authorized",
+          &State::PwdSent       => "pwd-sent",
+          _ => unreachable!(),
+        };
+        write!(f, "[state: {}]", state)
+      }
+    }
   }
 }
 
@@ -81,7 +94,7 @@ impl Ftp {
       connectionMode: None,
       working_dir: None,
       buffer: ByteBuffer::new(),
-      state: State::Undefined,
+      state: State::NonAuthorized,
     }
   }
 
@@ -92,7 +105,8 @@ impl Ftp {
   fn advance_state(prev_state: &State, bytes: &[u8]) -> Result<State, FtpError> {
 
     lazy_static! {
-      static ref RE_RESPONCE_CODE: Regex = Regex::new("(?m:^(\\d{3}) .+$)").unwrap();
+      static ref RE_RESPONCE_CODE: Regex = Regex::new("(?m:^(\\d{3}) (.+)$)").unwrap();
+      static ref RE_PATHNAME: Regex = Regex::new("\"(.+)\"").unwrap();
       static ref RE_PARTRIAL_RESPONCE_CODE: Regex = Regex::new("(?m:^(\\d{3})-.+$)").unwrap();
     }
 
@@ -111,19 +125,29 @@ impl Ftp {
             let code_str = captures.at(1).unwrap();
             let code:u32 = code_str.parse().unwrap();
             match code {
-              LOGGED_EXPECTED   => Ok(State::LoginReady),
-              PASSWORD_EXPECTED => Ok(State::PasswordReady),
-              LOGGED_IN         => Ok(State::Authorized),
+              LOGGED_EXPECTED    => Ok(State::LoginReady),
+              PASSWORD_EXPECTED  => Ok(State::PasswordReady),
+              LOGGED_IN          => Ok(State::Authorized),
+              PATHNAME_AVAILABLE => {
+                let pathname_str = captures.at(2).unwrap();
+                RE_PATHNAME.captures(pathname_str)
+                  .ok_or(FtpError::GargageData)
+                  .and_then(|path_capture|{
+                    let path = path_capture.at(1).unwrap();
+                    Ok(State::PathReceived(path.to_string()))
+                  })
+              },
               _ => unimplemented!(),
             }
           })
       )
       .and_then(|new_state|{
         let allowed:bool = match (prev_state, &new_state) {
-          (&State::Undefined, &State::LoginReady)       => true,
+          (&State::NonAuthorized, &State::LoginReady)   => true,
           (&State::LoginSent, &State::PasswordReady)    => true,
           (&State::PasswordReady, &State::PasswordSent) => true,
-          (&State::PasswordSent, &State::Authorized) => true,
+          (&State::PasswordSent, &State::Authorized)    => true,
+          (&State::PwdSent, &State::PathReceived(_))    => true,
           _ => false,
         };
         if allowed {
@@ -149,6 +173,9 @@ impl Ftp {
       Ok(new_state) => {
         self.buffer.clear();
         self.state = new_state;
+        if let &State::PathReceived(ref path) = &self.state {
+          self.working_dir = Some(path.clone());
+        }
         None
       }
     }
@@ -175,6 +202,23 @@ impl Ftp {
         self.state = State::PasswordSent;
       },
       _ => panic!("send_password is not allowed from the current state"),
+    }
+  }
+
+  pub fn send_pwd_req(&mut self, buffer: &mut ByteBuffer) {
+    match &self.state {
+      &State::Authorized => {
+        buffer.write_bytes("PWD\n".as_bytes());
+        self.state = State::PwdSent;
+      },
+      _ => panic!("send_pwd_req is not allowed from the current state"),
+    }
+  }
+
+  pub fn get_wd(&self) -> &str {
+    match &self.working_dir {
+      &Some(ref path) => &path,
+      &None           => panic!("get_wd is not available (did you called send_pwd_req?)"),
     }
   }
 
