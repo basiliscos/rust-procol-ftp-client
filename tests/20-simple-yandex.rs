@@ -33,10 +33,16 @@ fn session_sample() {
   output.clear();
   ftp.send_pwd_req(&mut output);
   assert_eq!(str::from_utf8(output.to_bytes().as_slice()).unwrap(), "PWD\n");
-
   ftp.feed("257 \"/\" is the current directory\n".as_bytes());
   assert_eq!(ftp.advance().is_none(), true);
   assert_eq!(ftp.get_wd(), "/");
 
+  output.clear();
+  ftp.send_type_req(&mut output, &DataMode::Binary);
+  assert_eq!(str::from_utf8(output.to_bytes().as_slice()).unwrap(), "TYPE I\n");
+  ftp.feed("200 Switching to Binary mode.\n".as_bytes());
+/*
+  check that data transpher mode is binary
+*/
 
 }

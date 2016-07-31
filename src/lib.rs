@@ -32,6 +32,7 @@ pub enum State {
 
   PwdSent,
   PathReceived(String),
+  DataTypeSent,
 }
 
 impl fmt::Display for State {
@@ -172,10 +173,16 @@ impl Ftp {
       Err(e)        => Some(e),
       Ok(new_state) => {
         self.buffer.clear();
-        self.state = new_state;
-        if let &State::PathReceived(ref path) = &self.state {
-          self.working_dir = Some(path.clone());
-        }
+
+        let final_state = match new_state {
+          State::PathReceived(path) => {
+            self.working_dir = Some(path);
+            State::Authorized
+          }
+          _ => new_state,
+        };
+
+        self.state = final_state;
         None
       }
     }
@@ -221,5 +228,23 @@ impl Ftp {
       &None           => panic!("get_wd is not available (did you called send_pwd_req?)"),
     }
   }
+
+  pub fn send_type_req(&mut self, buffer: &mut ByteBuffer, data_type: &DataMode) {
+    match &self.state {
+      &State::Authorized => {
+        buffer.write_bytes("TYPE ".as_bytes());
+        let type_string = match data_type {
+          &DataMode::Binary => "I",
+          &DataMode::Text => "T",
+        };
+        buffer.write_bytes(type_string.as_bytes());
+        buffer.write_bytes("\n".as_bytes());
+        self.state = State::DataTypeSent;
+      },
+      _ => panic!("send_type_req is not allowed from the {}", self.state),
+    }
+  }
+
+
 
 }
