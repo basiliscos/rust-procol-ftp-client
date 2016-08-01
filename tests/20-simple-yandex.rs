@@ -38,11 +38,9 @@ fn session_sample() {
   assert_eq!(ftp.get_wd(), "/");
 
   output.clear();
-  ftp.send_type_req(&mut output, &DataMode::Binary);
+  ftp.send_type_req(&mut output, DataMode::Binary);
   assert_eq!(str::from_utf8(output.to_bytes().as_slice()).unwrap(), "TYPE I\n");
   ftp.feed("200 Switching to Binary mode.\n".as_bytes());
-/*
-  check that data transpher mode is binary
-*/
+  assert_eq!(ftp.advance().is_none(), true);
 
 }
