@@ -182,7 +182,7 @@ impl Ftp {
           Ok(new_state)
         } else {
           println!("transition {} => {} is not allowed", prev_state, new_state);
-          Err(FtpError::ProtocolError("transition not allowed".to_string()))
+          Err(FtpError::ProtocolError(format!("{} => {} is not allowed", prev_state, new_state)))
         }
       })
   }
