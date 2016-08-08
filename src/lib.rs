@@ -8,13 +8,16 @@ use std::str;
 use std::fmt;
 use std::rc::Rc;
 
-pub const OPERATION_SUCCESS:u32  = 200;
-pub const LOGGED_EXPECTED:u32    = 220;
-pub const LOGGED_IN:u32          = 230;
-pub const PATHNAME_AVAILABLE:u32 = 257;
-pub const PASSWORD_EXPECTED:u32  = 331;
+pub const OPERATION_SUCCESS:u32    = 200;
+pub const SYSTEM_RECEIVED:u32      = 215;
+pub const LOGGED_EXPECTED:u32      = 220;
+pub const LOGGED_IN:u32            = 230;
+pub const PATHNAME_AVAILABLE:u32   = 257;
+pub const PASSWORD_EXPECTED:u32    = 331;
 
 #[derive(Clone)]
+#[derive(PartialEq)]
+#[derive(Debug)]
 pub enum DataMode {
   Binary,
   Text
@@ -44,16 +47,21 @@ pub enum State {
 
   PwdReqSent,
   PathReceived(String),
+
   DataTypeReqSent(DataMode),
   DataTypeConfirmed(DataMode),
+
+  SystemReqSent,
+  SystemRecived(String, String),
 }
 
 impl fmt::Display for State {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     match self {
-      &State::PathReceived(ref value)      => write!(f, "[state: path-received({})]", value),
-      &State::DataTypeReqSent(ref value)   => write!(f, "[state: data-type-req-sent({})]", value),
-      &State::DataTypeConfirmed(ref value) => write!(f, "[state: data-type-confirmed({})]", value),
+      &State::PathReceived(ref value)              => write!(f, "[state: path-received({})]", value),
+      &State::DataTypeReqSent(ref value)           => write!(f, "[state: data-type-req-sent({})]", value),
+      &State::DataTypeConfirmed(ref value)         => write!(f, "[state: data-type-confirmed({})]", value),
+      &State::SystemRecived(ref name, ref subtype) => write!(f, "[state: system-recieved({}/{})]", name, subtype),
       _ => {
         let state = match self {
           &State::NonAuthorized    => "non-authorized",
@@ -63,6 +71,7 @@ impl fmt::Display for State {
           &State::PasswordExpected => "password-expected",
           &State::PasswordReqSent  => "password-req-sent",
           &State::PwdReqSent       => "pwd-req-sent",
+          &State::SystemReqSent    => "system-req-sent",
           _ => unreachable!(),
         };
         write!(f, "[state: {}]", state)
@@ -79,43 +88,63 @@ pub enum FtpError {
 }
 
 
-impl fmt::Debug for FtpError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            ref NotEnoughData => write!(f, "no enough data"),
-            // ref ProtocolError =>  unimplemented!(),
-            //_ => unimplemented!(),
-            //&FtpError::ProtocolError(msg) => write!(f, "protocol error: {}", msg),
-        }
-    }
-}
-
-pub struct Ftp {
+struct FtpInternals {
   data_mode: Option<DataMode>,
   connectionMode: Option<ConnectionMode>,
   working_dir: Option<String>,
   sent_request: Option<Rc<State>>,
+  system: Option<(String, String)>,
   buffer: ByteBuffer,
   state: Rc<State>,
 }
 
+pub struct FtpReceiver {
+  internals: FtpInternals
+}
+
+pub struct FtpTransmitter {
+  internals: FtpInternals
+}
 
 
+pub struct FtpErrorWrapper {
+  error: FtpError,
+  receiver: FtpReceiver,
+}
 
-impl Ftp {
+impl fmt::Debug for FtpError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ref NotEnoughData => write!(f, "no enough data"),
+        }
+    }
+}
+
+impl fmt::Debug for FtpErrorWrapper {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    unimplemented!();
+  }
+}
+
+
+impl FtpReceiver {
   pub fn new() -> Self {
-    Ftp {
-      data_mode: None,
-      connectionMode: None,
-      working_dir: None,
-      sent_request: None,
-      buffer: ByteBuffer::new(),
-      state: Rc::new(State::NonAuthorized),
+    FtpReceiver {
+      internals: FtpInternals {
+        data_mode: None,
+        connectionMode: None,
+        working_dir: None,
+        sent_request: None,
+        system: None,
+        buffer: ByteBuffer::new(),
+        state: Rc::new(State::NonAuthorized),
+      }
     }
   }
 
+
   pub fn feed(&mut self, data: &[u8]) {
-    self.buffer.write_bytes(data);
+    self.internals.buffer.write_bytes(data);
   }
 
   fn advance_state(prev_state: &State, prev_req: &Option<Rc<State>>, bytes: &[u8]) -> Result<State, FtpError> {
@@ -123,11 +152,12 @@ impl Ftp {
     lazy_static! {
       static ref RE_RESPONCE_CODE: Regex = Regex::new("(?m:^(\\d{3}) (.+)$)").unwrap();
       static ref RE_PATHNAME: Regex = Regex::new("\"(.+)\"").unwrap();
+      static ref RE_SYSTEM: Regex = Regex::new("(\\w+) [Tt]ype: (\\w+)").unwrap();
       static ref RE_PARTRIAL_RESPONCE_CODE: Regex = Regex::new("(?m:^(\\d{3})-.+$)").unwrap();
     }
 
     str::from_utf8(bytes)
-      .map_err(|err| FtpError::GarbageData)
+      .map_err(|_| FtpError::GarbageData)
       .and_then(|response|
         RE_RESPONCE_CODE.captures(&response)
           .ok_or_else(||{
@@ -164,6 +194,16 @@ impl Ftp {
                     Ok(State::PathReceived(path.to_string()))
                   })
               },
+              SYSTEM_RECEIVED => {
+                let system_str = captures.at(2).unwrap();
+                RE_SYSTEM.captures(system_str)
+                  .ok_or(FtpError::GarbageData)
+                  .and_then(|path_capture|{
+                    let name = path_capture.at(1).unwrap();
+                    let subtype = path_capture.at(2).unwrap();
+                    Ok(State::SystemRecived(name.to_string(), subtype.to_string()))
+                  })
+              },
               _ => unimplemented!(),
             }
           })
@@ -176,6 +216,7 @@ impl Ftp {
           (&State::PasswordReqSent, &State::Authorized)              => true,
           (&State::PwdReqSent, &State::PathReceived(_))              => true,
           (&State::DataTypeReqSent(_), &State::DataTypeConfirmed(_)) => true,
+          (&State::SystemReqSent, &State::SystemRecived(_, _))       => true,
           _ => false,
         };
         if allowed {
@@ -187,85 +228,108 @@ impl Ftp {
       })
   }
 
-  pub fn advance(&mut self) -> Option<FtpError> {
 
-    lazy_static! {
-      static ref RE_RESPONCE_CODE: Regex = Regex::new("(?m:^(\\d{3}) .+$)").unwrap();
-      static ref RE_PARTRIAL_RESPONCE_CODE: Regex = Regex::new("(?m:^(\\d{3})-.+$)").unwrap();
-    }
+  pub fn advance(self) -> Result<FtpTransmitter, FtpErrorWrapper> {
+    let mut internals = self.internals;
 
-    let transition_result = Ftp::advance_state(&self.state, &self.sent_request, self.buffer.to_bytes().as_slice());
+    let transition_result = FtpReceiver::advance_state(&internals.state, &internals.sent_request, internals.buffer.to_bytes().as_slice());
 
     match transition_result {
-      Err(e)        => Some(e),
+      Err(e) => Err(FtpErrorWrapper {
+        error: e,
+        receiver: FtpReceiver { internals: internals },
+      }),
       Ok(new_state) => {
-        self.buffer.clear();
+        internals.buffer.clear();
 
         let final_state = match new_state {
           State::PathReceived(path) => {
-            self.working_dir = Some(path);
+            internals.working_dir = Some(path);
             State::Authorized
           },
           State::DataTypeConfirmed(data_type) => {
-            self.data_mode = Some(data_type);
+            internals.data_mode = Some(data_type);
+            State::Authorized
+          },
+          State::SystemRecived(name, subtype) => {
+            internals.system = Some((name, subtype));
             State::Authorized
           }
           _ => new_state,
         };
 
-        self.state = Rc::new(final_state);
-        self.sent_request = None;
-        None
+        internals.state = Rc::new(final_state);
+        internals.sent_request = None;
+        Ok(FtpTransmitter { internals: internals })
       }
     }
   }
+}
 
-  pub fn send_login(&mut self, buffer: &mut ByteBuffer, login: &str) {
-    match &*self.state {
+
+impl FtpTransmitter {
+
+
+  pub fn send_login(self, buffer: &mut ByteBuffer, login: &str) -> FtpReceiver {
+    let mut internals = self.internals;
+
+    match &*internals.state {
       &State::LoginReady => {
         buffer.write_bytes("USER ".as_bytes());
         buffer.write_bytes(login.as_bytes());
         buffer.write_bytes("\n".as_bytes());
-        self.state = Rc::new(State::LoginReqSent);
-        self.sent_request = Some(self.state.clone());
+        internals.state = Rc::new(State::LoginReqSent);
+        internals.sent_request = Some(internals.state.clone());
+
+        FtpReceiver { internals: internals }
       },
       _ => panic!("send_login is not allowed from the current state"),
     }
   }
 
-  pub fn send_password(&mut self, buffer: &mut ByteBuffer, pass: &str) {
-    match &*self.state {
+  pub fn send_password(self, buffer: &mut ByteBuffer, pass: &str) -> FtpReceiver {
+    let mut internals = self.internals;
+
+    match &*internals.state {
       &State::PasswordExpected => {
         buffer.write_bytes("PASS ".as_bytes());
         buffer.write_bytes(pass.as_bytes());
         buffer.write_bytes("\n".as_bytes());
-        self.state = Rc::new(State::PasswordReqSent);
-        self.sent_request = Some(self.state.clone());
+        internals.state = Rc::new(State::PasswordReqSent);
+        internals.sent_request = Some(internals.state.clone());
+
+        FtpReceiver { internals: internals }
       },
       _ => panic!("send_password is not allowed from the current state"),
     }
   }
 
-  pub fn send_pwd_req(&mut self, buffer: &mut ByteBuffer) {
-    match &*self.state {
+  pub fn send_pwd_req(self, buffer: &mut ByteBuffer) -> FtpReceiver {
+    let mut internals = self.internals;
+
+    match &*internals.state {
       &State::Authorized => {
         buffer.write_bytes("PWD\n".as_bytes());
-        self.state = Rc::new(State::PwdReqSent);
-        self.sent_request = Some(self.state.clone());
+        internals.state = Rc::new(State::PwdReqSent);
+        internals.sent_request = Some(internals.state.clone());
+
+        FtpReceiver { internals: internals }
       },
       _ => panic!("send_pwd_req is not allowed from the current state"),
     }
   }
 
   pub fn get_wd(&self) -> &str {
-    match &self.working_dir {
+    match &self.internals.working_dir {
       &Some(ref path) => &path,
       &None           => panic!("get_wd is not available (did you called send_pwd_req?)"),
     }
   }
 
-  pub fn send_type_req(&mut self, buffer: &mut ByteBuffer, data_type: DataMode) {
-    match &*self.state {
+  pub fn send_type_req(self, buffer: &mut ByteBuffer, data_type: DataMode) -> FtpReceiver {
+    let mut internals = self.internals;
+
+    match &*internals.state {
       &State::Authorized => {
         buffer.write_bytes("TYPE ".as_bytes());
         let type_string = match &data_type {
@@ -274,13 +338,43 @@ impl Ftp {
         };
         buffer.write_bytes(type_string.as_bytes());
         buffer.write_bytes("\n".as_bytes());
-        self.state = Rc::new(State::DataTypeReqSent(data_type));
-        self.sent_request = Some(self.state.clone());
+        internals.state = Rc::new(State::DataTypeReqSent(data_type));
+        internals.sent_request = Some(internals.state.clone());
+
+        FtpReceiver { internals: internals }
       },
-      _ => panic!("send_type_req is not allowed from the {}", self.state),
+      _ => panic!("send_type_req is not allowed from the {}", internals.state),
     }
   }
 
+  pub fn get_type(&self) -> &DataMode {
+    match &self.internals.data_mode {
+      &Some(ref mode) => &mode,
+      &None           => panic!("get_type is not available (did you called send_type_req?)"),
+    }
+  }
+
+  pub fn send_system_req(self, buffer: &mut ByteBuffer) -> FtpReceiver {
+    let mut internals = self.internals;
+
+    match &*internals.state {
+      &State::Authorized => {
+        buffer.write_bytes("SYST\n".as_bytes());
+        internals.state = Rc::new(State::SystemReqSent);
+        internals.sent_request = Some(internals.state.clone());
+
+        FtpReceiver { internals: internals }
+      },
+      _ => panic!("send_type_req is not allowed from the {}", internals.state),
+    }
+  }
+
+  pub fn get_system(&self) -> (&String, &String) {
+    match &self.internals.system {
+      &Some((ref name, ref subtype)) => (&name, &subtype),
+      &None                          => panic!("get_system is not available (did you called send_system_req?)"),
+    }
+  }
 
 
 }
