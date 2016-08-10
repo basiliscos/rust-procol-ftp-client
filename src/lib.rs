@@ -7,10 +7,12 @@ use regex::Regex;
 use std::str;
 use std::fmt;
 use std::rc::Rc;
+use std::net::Ipv4Addr;
 
 pub const OPERATION_SUCCESS:u32    = 200;
 pub const SYSTEM_RECEIVED:u32      = 215;
 pub const LOGGED_EXPECTED:u32      = 220;
+pub const PASSIVE_MODE:u32         = 227;
 pub const LOGGED_IN:u32            = 230;
 pub const PATHNAME_AVAILABLE:u32   = 257;
 pub const PASSWORD_EXPECTED:u32    = 331;
@@ -53,6 +55,9 @@ pub enum State {
 
   SystemReqSent,
   SystemRecived(String, String),
+
+  PassiveReqSent,
+  PassiveConfirmed(Ipv4Addr, u16),
 }
 
 impl fmt::Display for State {
@@ -62,6 +67,7 @@ impl fmt::Display for State {
       &State::DataTypeReqSent(ref value)           => write!(f, "[state: data-type-req-sent({})]", value),
       &State::DataTypeConfirmed(ref value)         => write!(f, "[state: data-type-confirmed({})]", value),
       &State::SystemRecived(ref name, ref subtype) => write!(f, "[state: system-recieved({}/{})]", name, subtype),
+      &State::PassiveConfirmed(ref addr, ref port) => write!(f, "[state: passive-mode ({}:{})]", addr, port),
       _ => {
         let state = match self {
           &State::NonAuthorized    => "non-authorized",
@@ -72,6 +78,7 @@ impl fmt::Display for State {
           &State::PasswordReqSent  => "password-req-sent",
           &State::PwdReqSent       => "pwd-req-sent",
           &State::SystemReqSent    => "system-req-sent",
+          &State::PassiveReqSent   => "system-req-sent",
           _ => unreachable!(),
         };
         write!(f, "[state: {}]", state)
@@ -94,6 +101,7 @@ struct FtpInternals {
   working_dir: Option<String>,
   sent_request: Option<Rc<State>>,
   system: Option<(String, String)>,
+  endpoint: Option<(Ipv4Addr, u16)>,
   buffer: ByteBuffer,
   state: Rc<State>,
 }
@@ -115,7 +123,9 @@ pub struct FtpErrorWrapper {
 impl fmt::Debug for FtpError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ref NotEnoughData => write!(f, "no enough data"),
+            &FtpError::GarbageData            => write!(f, "garbage data"),
+            &FtpError::NotEnoughData          => write!(f, "no enough data"),
+            &FtpError::ProtocolError(ref err) => write!(f, "protocol error: {}", err),
         }
     }
 }
@@ -136,6 +146,7 @@ impl FtpReceiver {
         working_dir: None,
         sent_request: None,
         system: None,
+        endpoint: None,
         buffer: ByteBuffer::new(),
         state: Rc::new(State::NonAuthorized),
       }
@@ -154,6 +165,7 @@ impl FtpReceiver {
       static ref RE_PATHNAME: Regex = Regex::new("\"(.+)\"").unwrap();
       static ref RE_SYSTEM: Regex = Regex::new("(\\w+) [Tt]ype: (\\w+)").unwrap();
       static ref RE_PARTRIAL_RESPONCE_CODE: Regex = Regex::new("(?m:^(\\d{3})-.+$)").unwrap();
+      static ref RE_PASSIVE_MODE: Regex = Regex::new("Entering Passive Mode \\((\\d+),(\\d+),(\\d+),(\\d+),(\\d+),(\\d+)\\)").unwrap();
     }
 
     str::from_utf8(bytes)
@@ -204,6 +216,31 @@ impl FtpReceiver {
                     Ok(State::SystemRecived(name.to_string(), subtype.to_string()))
                   })
               },
+              PASSIVE_MODE => {
+                let addr_str = captures.at(2).unwrap();
+                RE_PASSIVE_MODE.captures(addr_str)
+                  .ok_or(FtpError::GarbageData)
+                  .and_then(|path_capture|{
+                    let mut numbers = path_capture.iter().skip(1).map(|opt_value| {
+                      let value = opt_value.unwrap();
+                      let number:u8 = value.parse().unwrap();
+                      number
+                    });
+                    let a = numbers.next().unwrap();
+                    let b = numbers.next().unwrap();
+                    let c = numbers.next().unwrap();
+                    let d = numbers.next().unwrap();
+                    let p1 = numbers.next().unwrap();
+                    let p2 = numbers.next().unwrap();
+
+                    let p1_16 = p1 as u16;
+                    let p2_16 = p2 as u16;
+
+                    let addr = Ipv4Addr::new(a, b, c, d);
+                    let port = 256 * p1_16 + p2_16;
+                    Ok(State::PassiveConfirmed(addr, port))
+                  })
+              }
               _ => unimplemented!(),
             }
           })
@@ -217,6 +254,7 @@ impl FtpReceiver {
           (&State::PwdReqSent, &State::PathReceived(_))              => true,
           (&State::DataTypeReqSent(_), &State::DataTypeConfirmed(_)) => true,
           (&State::SystemReqSent, &State::SystemRecived(_, _))       => true,
+          (&State::PassiveReqSent, &State::PassiveConfirmed(_, _))   => true,
           _ => false,
         };
         if allowed {
@@ -253,6 +291,10 @@ impl FtpReceiver {
           },
           State::SystemRecived(name, subtype) => {
             internals.system = Some((name, subtype));
+            State::Authorized
+          }
+          State::PassiveConfirmed(addr, port) => {
+            internals.endpoint = Some((addr, port));
             State::Authorized
           }
           _ => new_state,
@@ -373,6 +415,28 @@ impl FtpTransmitter {
     match &self.internals.system {
       &Some((ref name, ref subtype)) => (&name, &subtype),
       &None                          => panic!("get_system is not available (did you called send_system_req?)"),
+    }
+  }
+
+  pub fn send_pass_req(self, buffer: &mut ByteBuffer) -> FtpReceiver {
+    let mut internals = self.internals;
+
+    match &*internals.state {
+      &State::Authorized => {
+        buffer.write_bytes("PASV\n".as_bytes());
+        internals.state = Rc::new(State::PassiveReqSent);
+        internals.sent_request = Some(internals.state.clone());
+
+        FtpReceiver { internals: internals }
+      },
+      _ => panic!("send_pass_req is not allowed from the {}", internals.state),
+    }
+  }
+
+  pub fn take_endpoint(&mut self) -> (Ipv4Addr, u16) {
+    match self.internals.endpoint.take() {
+      Some((addr, port)) => (addr, port),
+      None               => panic!("take_endpoint is not available (did you called send_pass_req?)"),
     }
   }
 
