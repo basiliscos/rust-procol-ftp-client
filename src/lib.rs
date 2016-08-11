@@ -186,10 +186,10 @@ impl FtpReceiver {
   fn advance_state(prev_state: &State, prev_req: &Option<Rc<State>>, bytes: &[u8]) -> Result<State, FtpError> {
 
     lazy_static! {
-      static ref RE_RESPONCE_CODE: Regex = Regex::new("(?m:^(\\d{3}) (.+)$)").unwrap();
+      static ref RE_RESPONCE_CODE: Regex = Regex::new("(?m:^(\\d{3}) (.+)\r$)").unwrap();
       static ref RE_PATHNAME: Regex = Regex::new("\"(.+)\"").unwrap();
       static ref RE_SYSTEM: Regex = Regex::new("(\\w+) [Tt]ype: (\\w+)").unwrap();
-      static ref RE_PARTRIAL_RESPONCE_CODE: Regex = Regex::new("(?m:^(\\d{3})-.+$)").unwrap();
+      static ref RE_PARTRIAL_RESPONCE_CODE: Regex = Regex::new("(?m:^(\\d{3})-.+\r$)").unwrap();
       static ref RE_PASSIVE_MODE: Regex = Regex::new("Entering Passive Mode \\((\\d+),(\\d+),(\\d+),(\\d+),(\\d+),(\\d+)\\)").unwrap();
     }
 
@@ -348,7 +348,7 @@ impl FtpTransmitter {
       &State::LoginReady => {
         buffer.write_bytes("USER ".as_bytes());
         buffer.write_bytes(login.as_bytes());
-        buffer.write_bytes("\n".as_bytes());
+        buffer.write_bytes("\r\n".as_bytes());
         internals.state = Rc::new(State::LoginReqSent);
         internals.sent_request = Some(internals.state.clone());
 
@@ -365,7 +365,7 @@ impl FtpTransmitter {
       &State::PasswordExpected => {
         buffer.write_bytes("PASS ".as_bytes());
         buffer.write_bytes(pass.as_bytes());
-        buffer.write_bytes("\n".as_bytes());
+        buffer.write_bytes("\r\n".as_bytes());
         internals.state = Rc::new(State::PasswordReqSent);
         internals.sent_request = Some(internals.state.clone());
 
@@ -380,7 +380,7 @@ impl FtpTransmitter {
 
     match &*internals.state {
       &State::Authorized => {
-        buffer.write_bytes("PWD\n".as_bytes());
+        buffer.write_bytes("PWD\r\n".as_bytes());
         internals.state = Rc::new(State::PwdReqSent);
         internals.sent_request = Some(internals.state.clone());
 
@@ -408,7 +408,7 @@ impl FtpTransmitter {
           &DataMode::Text => "T",
         };
         buffer.write_bytes(type_string.as_bytes());
-        buffer.write_bytes("\n".as_bytes());
+        buffer.write_bytes("\r\n".as_bytes());
         internals.state = Rc::new(State::DataTypeReqSent(data_type));
         internals.sent_request = Some(internals.state.clone());
 
@@ -430,7 +430,7 @@ impl FtpTransmitter {
 
     match &*internals.state {
       &State::Authorized => {
-        buffer.write_bytes("SYST\n".as_bytes());
+        buffer.write_bytes("SYST\r\n".as_bytes());
         internals.state = Rc::new(State::SystemReqSent);
         internals.sent_request = Some(internals.state.clone());
 
@@ -452,7 +452,7 @@ impl FtpTransmitter {
 
     match &*internals.state {
       &State::Authorized => {
-        buffer.write_bytes("PASV\n".as_bytes());
+        buffer.write_bytes("PASV\r\n".as_bytes());
         internals.state = Rc::new(State::PassiveReqSent);
         internals.sent_request = Some(internals.state.clone());
 
@@ -474,7 +474,7 @@ impl FtpTransmitter {
 
     match &*internals.state {
       &State::Authorized => {
-          buffer.write_bytes("LIST -l\n".as_bytes());
+          buffer.write_bytes("LIST -l\r\n".as_bytes());
           internals.state = Rc::new(State::ListReqSent);
           internals.sent_request = Some(internals.state.clone());
           FtpReceiver { internals: internals }
@@ -486,7 +486,7 @@ impl FtpTransmitter {
   pub fn take_list(&mut self) -> Result<Vec<RemoteFile>, FtpError> {
 
     lazy_static! {
-      static ref RE_LINE: Regex = Regex::new("(?m:^(.+)$)").unwrap();
+      static ref RE_LINE: Regex = Regex::new("(?m:^(.+)\r$)").unwrap();
       static ref RE_FILE: Regex = Regex::new("^([d-])(?:[rwx-]{3}){3} +\\d+ +\\w+ +\\w+ +(\\d+) +(.+) +(.+)$").unwrap();
     }
     str::from_utf8(self.internals.data_buffer.to_bytes().as_slice())
@@ -496,7 +496,7 @@ impl FtpTransmitter {
         let files = line_captures
           .filter_map(|line_cap| {
             let line = line_cap.at(1).unwrap();
-            println!("line = {}", line);
+            // println!("line = {}", line);
             match RE_FILE.captures(line) {
               None => None,
               Some(captures) => {
@@ -509,7 +509,7 @@ impl FtpTransmitter {
                   _   => unreachable!(),
                 };
                 let size:usize = size_str.parse().unwrap();
-                println!("remote file: {} ({})", name, size);
+                // println!("remote file: {} ({})", name, size);
                 let remote_file = RemoteFile {
                   kind: kind,
                   size: size,
