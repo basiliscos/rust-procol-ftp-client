@@ -56,13 +56,21 @@ fn session_sample() {
   ftp_reciver.feed("227 Entering Passive Mode (77,88,40,106,195,70).\n".as_bytes());
   ftp_transmitter = ftp_reciver.advance().unwrap();
 
-  let (addr, port) = ftp_transmitter.take_endpoint();
-  assert_eq!(port, 49990);
-  assert_eq!(addr, Ipv4Addr::new(77, 88, 40, 106));
+  assert_eq!(ftp_transmitter.get_endpoint(), (&Ipv4Addr::new(77, 88, 40, 106), &49990));
 
-  let listing = "
--rw-r--r--    1 ftp      ftp          5430 Jul 19  2014 favicon.ico
+  output.clear();
+  ftp_reciver = ftp_transmitter.send_list_req(&mut output);
+  assert_eq!(str::from_utf8(output.to_bytes().as_slice()).unwrap(), "LIST -l\n");
+
+
+  let listing = "-rw-r--r--    1 ftp      ftp          5430 Jul 19  2014 favicon.ico
 -rw-r--r--    1 ftp      ftp           660 Nov 02  2015 index.html
 drwxr-xr-x    3 ftp      ftp             3 Jul 19  2014 pub";
+
+  ftp_reciver.feed("150 Here comes the directory listing.\n".as_bytes());
+  ftp_reciver.feed_data(listing.as_bytes());
+  ftp_reciver.feed("226 Directory send OK.\n".as_bytes());
+
+  ftp_transmitter = ftp_reciver.advance().unwrap();
 
 }

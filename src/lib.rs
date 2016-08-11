@@ -9,13 +9,15 @@ use std::fmt;
 use std::rc::Rc;
 use std::net::Ipv4Addr;
 
-pub const OPERATION_SUCCESS:u32    = 200;
-pub const SYSTEM_RECEIVED:u32      = 215;
-pub const LOGGED_EXPECTED:u32      = 220;
-pub const PASSIVE_MODE:u32         = 227;
-pub const LOGGED_IN:u32            = 230;
-pub const PATHNAME_AVAILABLE:u32   = 257;
-pub const PASSWORD_EXPECTED:u32    = 331;
+const OPENNING_DATA_CONNECTION:u32 = 150;
+const OPERATION_SUCCESS:u32        = 200;
+const SYSTEM_RECEIVED:u32          = 215;
+const LOGGED_EXPECTED:u32          = 220;
+const CLOSING_DATA_CONNECTION:u32  = 226;
+const PASSIVE_MODE:u32             = 227;
+const LOGGED_IN:u32                = 230;
+const PATHNAME_AVAILABLE:u32       = 257;
+const PASSWORD_EXPECTED:u32        = 331;
 
 #[derive(Clone)]
 #[derive(PartialEq)]
@@ -32,11 +34,6 @@ impl fmt::Display for DataMode {
       &DataMode::Text   => write!(f, "data-mode:text"),
     }
   }
-}
-
-pub enum ConnectionMode {
-  Active,
-  Passive,
 }
 
 pub enum State {
@@ -58,6 +55,11 @@ pub enum State {
 
   PassiveReqSent,
   PassiveConfirmed(Ipv4Addr, u16),
+
+  ListReqSent,
+
+  DataTransferStarted,
+  DataTransferCompleted,
 }
 
 impl fmt::Display for State {
@@ -70,15 +72,18 @@ impl fmt::Display for State {
       &State::PassiveConfirmed(ref addr, ref port) => write!(f, "[state: passive-mode ({}:{})]", addr, port),
       _ => {
         let state = match self {
-          &State::NonAuthorized    => "non-authorized",
-          &State::Authorized       => "authorized",
-          &State::LoginReady       => "login-ready",
-          &State::LoginReqSent     => "login-req-sent",
-          &State::PasswordExpected => "password-expected",
-          &State::PasswordReqSent  => "password-req-sent",
-          &State::PwdReqSent       => "pwd-req-sent",
-          &State::SystemReqSent    => "system-req-sent",
-          &State::PassiveReqSent   => "system-req-sent",
+          &State::NonAuthorized         => "non-authorized",
+          &State::Authorized            => "authorized",
+          &State::LoginReady            => "login-ready",
+          &State::LoginReqSent          => "login-req-sent",
+          &State::PasswordExpected      => "password-expected",
+          &State::PasswordReqSent       => "password-req-sent",
+          &State::PwdReqSent            => "pwd-req-sent",
+          &State::SystemReqSent         => "system-req-sent",
+          &State::PassiveReqSent        => "passive-req-sent",
+          &State::ListReqSent           => "list-req-sent",
+          &State::DataTransferStarted   => "data-transfer-started",
+          &State::DataTransferCompleted => "data-transfer-completed",
           _ => unreachable!(),
         };
         write!(f, "[state: {}]", state)
@@ -97,12 +102,12 @@ pub enum FtpError {
 
 struct FtpInternals {
   data_mode: Option<DataMode>,
-  connectionMode: Option<ConnectionMode>,
   working_dir: Option<String>,
   sent_request: Option<Rc<State>>,
   system: Option<(String, String)>,
   endpoint: Option<(Ipv4Addr, u16)>,
   buffer: ByteBuffer,
+  data_buffer: ByteBuffer,
   state: Rc<State>,
 }
 
@@ -142,12 +147,12 @@ impl FtpReceiver {
     FtpReceiver {
       internals: FtpInternals {
         data_mode: None,
-        connectionMode: None,
         working_dir: None,
         sent_request: None,
         system: None,
         endpoint: None,
         buffer: ByteBuffer::new(),
+        data_buffer: ByteBuffer::new(),
         state: Rc::new(State::NonAuthorized),
       }
     }
@@ -157,6 +162,11 @@ impl FtpReceiver {
   pub fn feed(&mut self, data: &[u8]) {
     self.internals.buffer.write_bytes(data);
   }
+
+  pub fn feed_data(&mut self, data: &[u8]) {
+    self.internals.data_buffer.write_bytes(data);
+  }
+
 
   fn advance_state(prev_state: &State, prev_req: &Option<Rc<State>>, bytes: &[u8]) -> Result<State, FtpError> {
 
@@ -183,9 +193,11 @@ impl FtpReceiver {
             let code_str = captures.at(1).unwrap();
             let code:u32 = code_str.parse().unwrap();
             match code {
-              LOGGED_EXPECTED    => Ok(State::LoginReady),
-              PASSWORD_EXPECTED  => Ok(State::PasswordExpected),
-              LOGGED_IN          => Ok(State::Authorized),
+              LOGGED_EXPECTED          => Ok(State::LoginReady),
+              PASSWORD_EXPECTED        => Ok(State::PasswordExpected),
+              LOGGED_IN                => Ok(State::Authorized),
+              OPENNING_DATA_CONNECTION => Ok(State::DataTransferStarted),
+              CLOSING_DATA_CONNECTION  => Ok(State::DataTransferCompleted),
               OPERATION_SUCCESS  => {
                 match &*prev_req {
                   &Some(ref prev_sent_req) => {
@@ -247,14 +259,16 @@ impl FtpReceiver {
       )
       .and_then(|new_state|{
         let allowed:bool = match (prev_state, &new_state) {
-          (&State::NonAuthorized, &State::LoginReady)                => true,
-          (&State::LoginReqSent, &State::PasswordExpected)           => true,
-          (&State::PasswordExpected, &State::PasswordReqSent)        => true,
-          (&State::PasswordReqSent, &State::Authorized)              => true,
-          (&State::PwdReqSent, &State::PathReceived(_))              => true,
-          (&State::DataTypeReqSent(_), &State::DataTypeConfirmed(_)) => true,
-          (&State::SystemReqSent, &State::SystemRecived(_, _))       => true,
-          (&State::PassiveReqSent, &State::PassiveConfirmed(_, _))   => true,
+          (&State::NonAuthorized, &State::LoginReady)                  => true,
+          (&State::LoginReqSent, &State::PasswordExpected)             => true,
+          (&State::PasswordExpected, &State::PasswordReqSent)          => true,
+          (&State::PasswordReqSent, &State::Authorized)                => true,
+          (&State::PwdReqSent, &State::PathReceived(_))                => true,
+          (&State::DataTypeReqSent(_), &State::DataTypeConfirmed(_))   => true,
+          (&State::SystemReqSent, &State::SystemRecived(_, _))         => true,
+          (&State::PassiveReqSent, &State::PassiveConfirmed(_, _))     => true,
+          (&State::ListReqSent, &State::DataTransferStarted)           => true,
+          (&State::DataTransferStarted, &State::DataTransferCompleted) => true,
           _ => false,
         };
         if allowed {
@@ -279,6 +293,7 @@ impl FtpReceiver {
       }),
       Ok(new_state) => {
         internals.buffer.clear();
+        internals.data_buffer.clear();
 
         let final_state = match new_state {
           State::PathReceived(path) => {
@@ -433,10 +448,29 @@ impl FtpTransmitter {
     }
   }
 
-  pub fn take_endpoint(&mut self) -> (Ipv4Addr, u16) {
-    match self.internals.endpoint.take() {
-      Some((addr, port)) => (addr, port),
-      None               => panic!("take_endpoint is not available (did you called send_pass_req?)"),
+  pub fn get_endpoint(&self) -> (&Ipv4Addr, &u16) {
+    match &self.internals.endpoint {
+      &Some((ref addr, ref port)) => (addr, port),
+      &None                       => panic!("get_endpoint is not available (did you called send_pass_req?)"),
+    }
+  }
+
+  pub fn send_list_req(self, buffer: &mut ByteBuffer) -> FtpReceiver {
+    let mut internals = self.internals;
+
+    match &*internals.state {
+      &State::Authorized => {
+        match &internals.endpoint {
+          &Some(_) => {
+            buffer.write_bytes("LIST -l\n".as_bytes());
+            internals.state = Rc::new(State::ListReqSent);
+            internals.sent_request = Some(internals.state.clone());
+          }
+          &None    => panic!("send_list_req as no endpoint has been obtained"),
+        }
+        FtpReceiver { internals: internals }
+      },
+      _ => panic!("send_pass_req is not allowed from the {}", internals.state),
     }
   }
 
