@@ -92,6 +92,21 @@ impl fmt::Display for State {
   }
 }
 
+#[derive(PartialEq)]
+#[derive(Debug)]
+pub enum RemoteFileKind {
+  File,
+  Directory,
+}
+
+#[derive(PartialEq)]
+#[derive(Debug)]
+pub struct RemoteFile {
+  pub kind: RemoteFileKind,
+  pub size: usize,
+  pub name: String,
+}
+
 
 pub enum FtpError {
   NotEnoughData,
@@ -293,7 +308,6 @@ impl FtpReceiver {
       }),
       Ok(new_state) => {
         internals.buffer.clear();
-        internals.data_buffer.clear();
 
         let final_state = match new_state {
           State::PathReceived(path) => {
@@ -448,10 +462,10 @@ impl FtpTransmitter {
     }
   }
 
-  pub fn get_endpoint(&self) -> (&Ipv4Addr, &u16) {
-    match &self.internals.endpoint {
-      &Some((ref addr, ref port)) => (addr, port),
-      &None                       => panic!("get_endpoint is not available (did you called send_pass_req?)"),
+  pub fn take_endpoint(&mut self) -> (Ipv4Addr, u16) {
+    match self.internals.endpoint.take() {
+      Some((addr, port)) => (addr, port),
+      None              => panic!("take_endpoint is not available (did you called send_pass_req?)"),
     }
   }
 
@@ -460,18 +474,57 @@ impl FtpTransmitter {
 
     match &*internals.state {
       &State::Authorized => {
-        match &internals.endpoint {
-          &Some(_) => {
-            buffer.write_bytes("LIST -l\n".as_bytes());
-            internals.state = Rc::new(State::ListReqSent);
-            internals.sent_request = Some(internals.state.clone());
-          }
-          &None    => panic!("send_list_req as no endpoint has been obtained"),
-        }
-        FtpReceiver { internals: internals }
-      },
+          buffer.write_bytes("LIST -l\n".as_bytes());
+          internals.state = Rc::new(State::ListReqSent);
+          internals.sent_request = Some(internals.state.clone());
+          FtpReceiver { internals: internals }
+        },
       _ => panic!("send_pass_req is not allowed from the {}", internals.state),
     }
+  }
+
+  pub fn take_list(&mut self) -> Result<Vec<RemoteFile>, FtpError> {
+
+    lazy_static! {
+      static ref RE_LINE: Regex = Regex::new("(?m:^(.+)$)").unwrap();
+      static ref RE_FILE: Regex = Regex::new("^([d-])(?:[rwx-]{3}){3} +\\d+ +\\w+ +\\w+ +(\\d+) +(.+) +(.+)$").unwrap();
+    }
+    str::from_utf8(self.internals.data_buffer.to_bytes().as_slice())
+      .map_err(|_| FtpError::GarbageData)
+      .and_then(|list|{
+        let line_captures = RE_LINE.captures_iter(list);
+        let files = line_captures
+          .filter_map(|line_cap| {
+            let line = line_cap.at(1).unwrap();
+            println!("line = {}", line);
+            match RE_FILE.captures(line) {
+              None => None,
+              Some(captures) => {
+                let kind_str = captures.at(1).unwrap();
+                let size_str = captures.at(2).unwrap();
+                let name = captures.at(4).unwrap();
+                let kind = match kind_str {
+                  "d" => RemoteFileKind::Directory,
+                  "-" => RemoteFileKind::File,
+                  _   => unreachable!(),
+                };
+                let size:usize = size_str.parse().unwrap();
+                println!("remote file: {} ({})", name, size);
+                let remote_file = RemoteFile {
+                  kind: kind,
+                  size: size,
+                  name: name.to_string(),
+                };
+                Some(remote_file)
+              }
+            }
+          });
+        let mut vec:Vec<RemoteFile> = Vec::new();
+        for file in files {
+          vec.push(file);
+        }
+        Ok(vec)
+      })
   }
 
 

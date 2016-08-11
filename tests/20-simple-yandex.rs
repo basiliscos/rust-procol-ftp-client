@@ -56,7 +56,7 @@ fn session_sample() {
   ftp_reciver.feed("227 Entering Passive Mode (77,88,40,106,195,70).\n".as_bytes());
   ftp_transmitter = ftp_reciver.advance().unwrap();
 
-  assert_eq!(ftp_transmitter.get_endpoint(), (&Ipv4Addr::new(77, 88, 40, 106), &49990));
+  assert_eq!(ftp_transmitter.take_endpoint(), (Ipv4Addr::new(77, 88, 40, 106), 49990));
 
   output.clear();
   ftp_reciver = ftp_transmitter.send_list_req(&mut output);
@@ -72,5 +72,10 @@ drwxr-xr-x    3 ftp      ftp             3 Jul 19  2014 pub";
   ftp_reciver.feed("226 Directory send OK.\n".as_bytes());
 
   ftp_transmitter = ftp_reciver.advance().unwrap();
+  let list = ftp_transmitter.take_list().unwrap();
+  assert_eq!(list.len(), 3);
+  assert_eq!(list[0], RemoteFile { kind: RemoteFileKind::File, size: 5430,  name: "favicon.ico".to_string() } );
+  assert_eq!(list[1], RemoteFile { kind: RemoteFileKind::File, size: 660,  name: "index.html".to_string() } );
+  assert_eq!(list[2], RemoteFile { kind: RemoteFileKind::Directory, size: 3,  name: "pub".to_string() } );
 
 }
