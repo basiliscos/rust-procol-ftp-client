@@ -116,6 +116,7 @@ pub enum FtpError {
 
 
 struct FtpInternals {
+  error: Option<FtpError>,
   data_mode: Option<DataMode>,
   working_dir: Option<String>,
   sent_request: Option<Rc<State>>,
@@ -127,18 +128,13 @@ struct FtpInternals {
 }
 
 pub struct FtpReceiver {
-  internals: FtpInternals
+  internals: Rc<FtpInternals>
 }
 
 pub struct FtpTransmitter {
-  internals: FtpInternals
+  internals: Rc<FtpInternals>
 }
 
-
-pub struct FtpErrorWrapper {
-  error: FtpError,
-  receiver: FtpReceiver,
-}
 
 impl fmt::Debug for FtpError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -150,17 +146,11 @@ impl fmt::Debug for FtpError {
     }
 }
 
-impl fmt::Debug for FtpErrorWrapper {
-  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    unimplemented!();
-  }
-}
-
-
 impl FtpReceiver {
   pub fn new() -> Self {
     FtpReceiver {
-      internals: FtpInternals {
+      internals: Rc::new(FtpInternals {
+        error: None,
         data_mode: None,
         working_dir: None,
         sent_request: None,
@@ -169,17 +159,17 @@ impl FtpReceiver {
         buffer: ByteBuffer::new(),
         data_buffer: ByteBuffer::new(),
         state: Rc::new(State::NonAuthorized),
-      }
+      })
     }
   }
 
 
   pub fn feed(&mut self, data: &[u8]) {
-    self.internals.buffer.write_bytes(data);
+    Rc::get_mut(&mut self.internals).unwrap().buffer.write_bytes(data);
   }
 
   pub fn feed_data(&mut self, data: &[u8]) {
-    self.internals.data_buffer.write_bytes(data);
+    Rc::get_mut(&mut self.internals).unwrap().data_buffer.write_bytes(data);
   }
 
 
@@ -296,41 +286,45 @@ impl FtpReceiver {
   }
 
 
-  pub fn advance(self) -> Result<FtpTransmitter, FtpErrorWrapper> {
+  pub fn try_advance(self) -> Result<FtpTransmitter, Self> {
     let mut internals = self.internals;
 
-    let transition_result = FtpReceiver::advance_state(&internals.state, &internals.sent_request, internals.buffer.to_bytes().as_slice());
+    let transition_result = FtpReceiver::advance_state(&internals.state, &internals.sent_request, &*internals.buffer.to_bytes().as_slice());
 
     match transition_result {
-      Err(e) => Err(FtpErrorWrapper {
-        error: e,
-        receiver: FtpReceiver { internals: internals },
-      }),
+      Err(e) => {
+        Rc::get_mut(&mut internals).unwrap().error = Some(e);
+        Err(FtpReceiver { internals: internals.clone() })
+      }
+      ,
       Ok(new_state) => {
-        internals.buffer.clear();
+        {
+          let mut int_ref = Rc::get_mut(&mut internals).unwrap();
+          int_ref.buffer.clear();
 
-        let final_state = match new_state {
-          State::PathReceived(path) => {
-            internals.working_dir = Some(path);
-            State::Authorized
-          },
-          State::DataTypeConfirmed(data_type) => {
-            internals.data_mode = Some(data_type);
-            State::Authorized
-          },
-          State::SystemRecived(name, subtype) => {
-            internals.system = Some((name, subtype));
-            State::Authorized
-          }
-          State::PassiveConfirmed(addr, port) => {
-            internals.endpoint = Some((addr, port));
-            State::Authorized
-          }
-          _ => new_state,
-        };
+          let final_state = match new_state {
+            State::PathReceived(path) => {
+              int_ref.working_dir = Some(path);
+              State::Authorized
+            },
+            State::DataTypeConfirmed(data_type) => {
+              int_ref.data_mode = Some(data_type);
+              State::Authorized
+            },
+            State::SystemRecived(name, subtype) => {
+              int_ref.system = Some((name, subtype));
+              State::Authorized
+            }
+            State::PassiveConfirmed(addr, port) => {
+              int_ref.endpoint = Some((addr, port));
+              State::Authorized
+            }
+            _ => new_state,
+          };
 
-        internals.state = Rc::new(final_state);
-        internals.sent_request = None;
+          int_ref.state = Rc::new(final_state);
+          int_ref.sent_request = None;
+        }
         Ok(FtpTransmitter { internals: internals })
       }
     }
@@ -340,7 +334,6 @@ impl FtpReceiver {
 
 impl FtpTransmitter {
 
-
   pub fn send_login(self, buffer: &mut ByteBuffer, login: &str) -> FtpReceiver {
     let mut internals = self.internals;
 
@@ -349,8 +342,11 @@ impl FtpTransmitter {
         buffer.write_bytes("USER ".as_bytes());
         buffer.write_bytes(login.as_bytes());
         buffer.write_bytes("\r\n".as_bytes());
-        internals.state = Rc::new(State::LoginReqSent);
-        internals.sent_request = Some(internals.state.clone());
+        {
+          let mut int_ref = Rc::get_mut(&mut internals).unwrap();
+          int_ref.state = Rc::new(State::LoginReqSent);
+          int_ref.sent_request = Some(int_ref.state.clone());
+        }
 
         FtpReceiver { internals: internals }
       },
@@ -366,8 +362,11 @@ impl FtpTransmitter {
         buffer.write_bytes("PASS ".as_bytes());
         buffer.write_bytes(pass.as_bytes());
         buffer.write_bytes("\r\n".as_bytes());
-        internals.state = Rc::new(State::PasswordReqSent);
-        internals.sent_request = Some(internals.state.clone());
+        {
+          let mut int_ref = Rc::get_mut(&mut internals).unwrap();
+          int_ref.state = Rc::new(State::PasswordReqSent);
+          int_ref.sent_request = Some(int_ref.state.clone());
+        }
 
         FtpReceiver { internals: internals }
       },
@@ -381,8 +380,11 @@ impl FtpTransmitter {
     match &*internals.state {
       &State::Authorized => {
         buffer.write_bytes("PWD\r\n".as_bytes());
-        internals.state = Rc::new(State::PwdReqSent);
-        internals.sent_request = Some(internals.state.clone());
+        {
+          let mut int_ref = Rc::get_mut(&mut internals).unwrap();
+          int_ref.state = Rc::new(State::PwdReqSent);
+          int_ref.sent_request = Some(int_ref.state.clone());
+        }
 
         FtpReceiver { internals: internals }
       },
@@ -409,8 +411,11 @@ impl FtpTransmitter {
         };
         buffer.write_bytes(type_string.as_bytes());
         buffer.write_bytes("\r\n".as_bytes());
-        internals.state = Rc::new(State::DataTypeReqSent(data_type));
-        internals.sent_request = Some(internals.state.clone());
+        {
+          let mut int_ref = Rc::get_mut(&mut internals).unwrap();
+          int_ref.state = Rc::new(State::DataTypeReqSent(data_type));
+          int_ref.sent_request = Some(int_ref.state.clone());
+        }
 
         FtpReceiver { internals: internals }
       },
@@ -431,8 +436,11 @@ impl FtpTransmitter {
     match &*internals.state {
       &State::Authorized => {
         buffer.write_bytes("SYST\r\n".as_bytes());
-        internals.state = Rc::new(State::SystemReqSent);
-        internals.sent_request = Some(internals.state.clone());
+        {
+          let mut int_ref = Rc::get_mut(&mut internals).unwrap();
+          int_ref.state = Rc::new(State::SystemReqSent);
+          int_ref.sent_request = Some(int_ref.state.clone());
+        }
 
         FtpReceiver { internals: internals }
       },
@@ -447,14 +455,17 @@ impl FtpTransmitter {
     }
   }
 
-  pub fn send_pass_req(self, buffer: &mut ByteBuffer) -> FtpReceiver {
+  pub fn send_pasv_req(self, buffer: &mut ByteBuffer) -> FtpReceiver {
     let mut internals = self.internals;
 
     match &*internals.state {
       &State::Authorized => {
         buffer.write_bytes("PASV\r\n".as_bytes());
-        internals.state = Rc::new(State::PassiveReqSent);
-        internals.sent_request = Some(internals.state.clone());
+        {
+          let mut int_ref = Rc::get_mut(&mut internals).unwrap();
+          int_ref.state = Rc::new(State::PassiveReqSent);
+          int_ref.sent_request = Some(int_ref.state.clone());
+        }
 
         FtpReceiver { internals: internals }
       },
@@ -463,7 +474,7 @@ impl FtpTransmitter {
   }
 
   pub fn take_endpoint(&mut self) -> (Ipv4Addr, u16) {
-    match self.internals.endpoint.take() {
+    match Rc::get_mut(&mut self.internals).unwrap().endpoint.take() {
       Some((addr, port)) => (addr, port),
       None              => panic!("take_endpoint is not available (did you called send_pass_req?)"),
     }
@@ -475,8 +486,11 @@ impl FtpTransmitter {
     match &*internals.state {
       &State::Authorized => {
           buffer.write_bytes("LIST -l\r\n".as_bytes());
-          internals.state = Rc::new(State::ListReqSent);
-          internals.sent_request = Some(internals.state.clone());
+          {
+            let mut int_ref = Rc::get_mut(&mut internals).unwrap();
+            int_ref.state = Rc::new(State::ListReqSent);
+            int_ref.sent_request = Some(int_ref.state.clone());
+          }
           FtpReceiver { internals: internals }
         },
       _ => panic!("send_pass_req is not allowed from the {}", internals.state),
@@ -489,7 +503,8 @@ impl FtpTransmitter {
       static ref RE_LINE: Regex = Regex::new("(?m:^(.+)\r$)").unwrap();
       static ref RE_FILE: Regex = Regex::new("^([d-])(?:[rwx-]{3}){3} +\\d+ +\\w+ +\\w+ +(\\d+) +(.+) +(.+)$").unwrap();
     }
-    str::from_utf8(self.internals.data_buffer.to_bytes().as_slice())
+    let int_ref = Rc::get_mut(&mut self.internals).unwrap();
+    str::from_utf8(int_ref.data_buffer.to_bytes().as_slice())
       .map_err(|_| FtpError::GarbageData)
       .and_then(|list|{
         let line_captures = RE_LINE.captures_iter(list);
