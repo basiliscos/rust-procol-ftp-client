@@ -1,13 +1,12 @@
 #[macro_use] extern crate lazy_static;
 extern crate regex;
-extern crate bytebuffer;
 
-use bytebuffer::ByteBuffer;
 use regex::Regex;
 use std::str;
 use std::fmt;
 use std::rc::Rc;
 use std::net::Ipv4Addr;
+use std::ptr;
 
 const OPENNING_DATA_CONNECTION:u32 = 150;
 const OPERATION_SUCCESS:u32        = 200;
@@ -318,16 +317,38 @@ impl FtpReceiver {
 }
 
 
+lazy_static! {
+  static ref DATA_USER: &'static [u8]        = "USER ".as_bytes();
+  static ref DATA_PASS: &'static [u8]        = "PASS ".as_bytes();
+  static ref DATA_PWD: &'static [u8]         = "PWD\r\n".as_bytes();
+  static ref DATA_ENDING: &'static [u8]      = "\r\n".as_bytes();
+  static ref DATA_DATA_BINARY: &'static [u8] = "TYPE I\r\n".as_bytes();
+  static ref DATA_DATA_TEXT: &'static [u8]   = "TYPE T\r\n".as_bytes();
+  static ref DATA_SYST: &'static [u8]        = "SYST\r\n".as_bytes();
+  static ref DATA_PASV: &'static [u8]        = "PASV\r\n".as_bytes();
+  static ref DATA_LIST: &'static [u8]        = "LIST -l\r\n".as_bytes();
+}
+
+
 impl FtpTransmitter {
 
-  pub fn send_login(self, buffer: &mut ByteBuffer, login: &str) -> FtpReceiver {
+  pub fn send_login(self, buffer: &mut [u8], count: &mut usize, login: &str) -> FtpReceiver {
     let mut internals = self.internals;
 
     match &*internals.state {
+
       &State::LoginReady => {
-        buffer.write_bytes("USER ".as_bytes());
-        buffer.write_bytes(login.as_bytes());
-        buffer.write_bytes("\r\n".as_bytes());
+        let data_login = login.as_bytes();
+        let mut my_count = 0;
+        unsafe {
+          ptr::copy_nonoverlapping(&DATA_USER[0], &mut buffer[my_count], DATA_USER.len());
+          my_count += DATA_USER.len();
+          ptr::copy_nonoverlapping(&data_login[0], &mut buffer[my_count], data_login.len());
+          my_count += data_login.len();
+          ptr::copy_nonoverlapping(&DATA_ENDING[0], &mut buffer[my_count], DATA_ENDING.len());
+        };
+        my_count += DATA_ENDING.len();
+        *count = my_count;
         {
           let mut int_ref = Rc::get_mut(&mut internals).unwrap();
           int_ref.state = Rc::new(State::LoginReqSent);
@@ -340,14 +361,22 @@ impl FtpTransmitter {
     }
   }
 
-  pub fn send_password(self, buffer: &mut ByteBuffer, pass: &str) -> FtpReceiver {
+  pub fn send_password(self, buffer: &mut [u8], count: &mut usize, pass: &str) -> FtpReceiver {
     let mut internals = self.internals;
 
     match &*internals.state {
       &State::PasswordExpected => {
-        buffer.write_bytes("PASS ".as_bytes());
-        buffer.write_bytes(pass.as_bytes());
-        buffer.write_bytes("\r\n".as_bytes());
+        let data_password = pass.as_bytes();
+        let mut my_count = 0;
+        unsafe {
+          ptr::copy_nonoverlapping(&DATA_PASS[0], &mut buffer[my_count], DATA_PASS.len());
+          my_count += DATA_PASS.len();
+          ptr::copy_nonoverlapping(&data_password[0], &mut buffer[my_count], data_password.len());
+          my_count += data_password.len();
+          ptr::copy_nonoverlapping(&DATA_ENDING[0], &mut buffer[my_count], DATA_ENDING.len());
+        };
+        my_count += DATA_ENDING.len();
+        *count = my_count;
         {
           let mut int_ref = Rc::get_mut(&mut internals).unwrap();
           int_ref.state = Rc::new(State::PasswordReqSent);
@@ -360,12 +389,13 @@ impl FtpTransmitter {
     }
   }
 
-  pub fn send_pwd_req(self, buffer: &mut ByteBuffer) -> FtpReceiver {
+  pub fn send_pwd_req(self, buffer: &mut [u8], count: &mut usize) -> FtpReceiver {
     let mut internals = self.internals;
 
     match &*internals.state {
       &State::Authorized => {
-        buffer.write_bytes("PWD\r\n".as_bytes());
+        unsafe { ptr::copy_nonoverlapping(&DATA_PWD[0], &mut buffer[0], DATA_PWD.len()); }
+        *count = DATA_PWD.len();
         {
           let mut int_ref = Rc::get_mut(&mut internals).unwrap();
           int_ref.state = Rc::new(State::PwdReqSent);
@@ -385,18 +415,21 @@ impl FtpTransmitter {
     }
   }
 
-  pub fn send_type_req(self, buffer: &mut ByteBuffer, data_type: DataMode) -> FtpReceiver {
+  pub fn send_type_req(self, buffer: &mut [u8], count: &mut usize, data_type: DataMode) -> FtpReceiver {
     let mut internals = self.internals;
 
     match &*internals.state {
       &State::Authorized => {
-        buffer.write_bytes("TYPE ".as_bytes());
-        let type_string = match &data_type {
-          &DataMode::Binary => "I",
-          &DataMode::Text => "T",
+        match &data_type {
+          &DataMode::Binary => {
+            unsafe { ptr::copy_nonoverlapping(&DATA_DATA_BINARY[0], &mut buffer[0], DATA_DATA_BINARY.len()); }
+            *count = DATA_DATA_BINARY.len();
+          },
+          &DataMode::Text => {
+            unsafe { ptr::copy_nonoverlapping(&DATA_DATA_TEXT[0], &mut buffer[0], DATA_DATA_TEXT.len()); }
+            *count = DATA_DATA_TEXT.len();
+          }
         };
-        buffer.write_bytes(type_string.as_bytes());
-        buffer.write_bytes("\r\n".as_bytes());
         {
           let mut int_ref = Rc::get_mut(&mut internals).unwrap();
           int_ref.state = Rc::new(State::DataTypeReqSent(data_type));
@@ -416,12 +449,13 @@ impl FtpTransmitter {
     }
   }
 
-  pub fn send_system_req(self, buffer: &mut ByteBuffer) -> FtpReceiver {
+  pub fn send_system_req(self, buffer: &mut [u8], count: &mut usize) -> FtpReceiver {
     let mut internals = self.internals;
 
     match &*internals.state {
       &State::Authorized => {
-        buffer.write_bytes("SYST\r\n".as_bytes());
+        unsafe { ptr::copy_nonoverlapping(&DATA_SYST[0], &mut buffer[0], DATA_SYST.len()); }
+        *count = DATA_SYST.len();
         {
           let mut int_ref = Rc::get_mut(&mut internals).unwrap();
           int_ref.state = Rc::new(State::SystemReqSent);
@@ -441,12 +475,13 @@ impl FtpTransmitter {
     }
   }
 
-  pub fn send_pasv_req(self, buffer: &mut ByteBuffer) -> FtpReceiver {
+  pub fn send_pasv_req(self, buffer: &mut [u8], count: &mut usize) -> FtpReceiver {
     let mut internals = self.internals;
 
     match &*internals.state {
       &State::Authorized => {
-        buffer.write_bytes("PASV\r\n".as_bytes());
+        unsafe { ptr::copy_nonoverlapping(&DATA_PASV[0], &mut buffer[0], DATA_PASV.len()); }
+        *count = DATA_PASV.len();
         {
           let mut int_ref = Rc::get_mut(&mut internals).unwrap();
           int_ref.state = Rc::new(State::PassiveReqSent);
@@ -466,12 +501,13 @@ impl FtpTransmitter {
     }
   }
 
-  pub fn send_list_req(self, buffer: &mut ByteBuffer) -> FtpReceiver {
+  pub fn send_list_req(self, buffer: &mut [u8], count: &mut usize) -> FtpReceiver {
     let mut internals = self.internals;
 
     match &*internals.state {
       &State::Authorized => {
-          buffer.write_bytes("LIST -l\r\n".as_bytes());
+          unsafe { ptr::copy_nonoverlapping(&DATA_LIST[0], &mut buffer[0], DATA_LIST.len()); }
+          *count = DATA_LIST.len();
           {
             let mut int_ref = Rc::get_mut(&mut internals).unwrap();
             int_ref.state = Rc::new(State::ListReqSent);
@@ -526,6 +562,5 @@ impl FtpTransmitter {
         Ok(vec)
       })
   }
-
 
 }

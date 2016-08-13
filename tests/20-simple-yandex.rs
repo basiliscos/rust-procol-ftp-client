@@ -1,8 +1,6 @@
 extern crate protocol_ftp_client;
-extern crate bytebuffer;
 
 use protocol_ftp_client::*;
-use bytebuffer::ByteBuffer;
 use std::str;
 use std::net::Ipv4Addr;
 
@@ -10,21 +8,21 @@ use std::net::Ipv4Addr;
 
 #[test]
 fn session_sample() {
-  let mut output = ByteBuffer::new();
+  let mut tx_buff:[u8; 1024] = [0; 1024];
+  let mut tx_count = 0;
+
   let mut ftp_reciver = FtpReceiver::new();
 
   ftp_reciver = ftp_reciver
     .try_advance("220 This is ftp0.ydx.freebsd.org - hosted at Yandex.\r\n".as_bytes()).ok().unwrap()
-    .send_login(&mut output, "anonymous");
-  assert_eq!(str::from_utf8(output.to_bytes().as_slice()).unwrap(), "USER anonymous\r\n");
+    .send_login(&mut tx_buff, &mut tx_count, "anonymous");
+  assert_eq!(str::from_utf8(&tx_buff[0 .. tx_count]).unwrap(), "USER anonymous\r\n");
 
-  output.clear();
   ftp_reciver = ftp_reciver
     .try_advance("331 Please specify the password.\r\n".as_bytes()).ok().unwrap()
-    .send_password(&mut output, "anonymous@nowhere.com");
-  assert_eq!(str::from_utf8(output.to_bytes().as_slice()).unwrap(), "PASS anonymous@nowhere.com\r\n");
+    .send_password(&mut tx_buff, &mut tx_count, "anonymous@nowhere.com");
+  assert_eq!(str::from_utf8(&tx_buff[0 .. tx_count]).unwrap(), "PASS anonymous@nowhere.com\r\n");
 
-  output.clear();
   let banner = "230-\r
 230-This is ftp0.ydx.FreeBSD.org, graciously hosted by Yandex.\r
 230-\r
@@ -34,34 +32,29 @@ fn session_sample() {
 ";
   let mut ftp_transmitter = ftp_reciver.try_advance(banner.as_bytes()).ok().unwrap();
 
-  output.clear();
-  ftp_reciver = ftp_transmitter.send_pwd_req(&mut output);
-  assert_eq!(str::from_utf8(output.to_bytes().as_slice()).unwrap(), "PWD\r\n");
+  ftp_reciver = ftp_transmitter.send_pwd_req(&mut tx_buff, &mut tx_count);
+  assert_eq!(str::from_utf8(&tx_buff[0 .. tx_count]).unwrap(), "PWD\r\n");
   ftp_transmitter = ftp_reciver.try_advance("257 \"/\" is the current directory\r\n".as_bytes()).ok().unwrap();
   assert_eq!(ftp_transmitter.get_wd(), "/");
 
-  output.clear();
-  ftp_reciver = ftp_transmitter.send_type_req(&mut output, DataMode::Binary);
-  assert_eq!(str::from_utf8(output.to_bytes().as_slice()).unwrap(), "TYPE I\r\n");
+  ftp_reciver = ftp_transmitter.send_type_req(&mut tx_buff, &mut tx_count, DataMode::Binary);
+  assert_eq!(str::from_utf8(&tx_buff[0 .. tx_count]).unwrap(), "TYPE I\r\n");
   ftp_transmitter = ftp_reciver.try_advance("200 Switching to Binary mode.\r\n".as_bytes()).ok().unwrap();
   assert_eq!(ftp_transmitter.get_type(), &DataMode::Binary);
 
-  output.clear();
-  ftp_reciver = ftp_transmitter.send_system_req(&mut output);
-  assert_eq!(str::from_utf8(output.to_bytes().as_slice()).unwrap(), "SYST\r\n");
+  ftp_reciver = ftp_transmitter.send_system_req(&mut tx_buff, &mut tx_count);
+  assert_eq!(str::from_utf8(&tx_buff[0 .. tx_count]).unwrap(), "SYST\r\n");
   ftp_transmitter = ftp_reciver.try_advance("215 UNIX Type: L8\r\n".as_bytes()).ok().unwrap();
   assert_eq!(ftp_transmitter.get_system(), (&"UNIX".to_string(), &"L8".to_string()));
 
-  output.clear();
-  ftp_reciver = ftp_transmitter.send_pasv_req(&mut output);
-  assert_eq!(str::from_utf8(output.to_bytes().as_slice()).unwrap(), "PASV\r\n");
+  ftp_reciver = ftp_transmitter.send_pasv_req(&mut tx_buff, &mut tx_count);
+  assert_eq!(str::from_utf8(&tx_buff[0 .. tx_count]).unwrap(), "PASV\r\n");
   ftp_transmitter = ftp_reciver.try_advance("227 Entering Passive Mode (77,88,40,106,195,70).\r\n".as_bytes()).ok().unwrap();
 
   assert_eq!(ftp_transmitter.take_endpoint(), (Ipv4Addr::new(77, 88, 40, 106), 49990));
 
-  output.clear();
-  ftp_reciver = ftp_transmitter.send_list_req(&mut output);
-  assert_eq!(str::from_utf8(output.to_bytes().as_slice()).unwrap(), "LIST -l\r\n");
+  ftp_reciver = ftp_transmitter.send_list_req(&mut tx_buff, &mut tx_count);
+  assert_eq!(str::from_utf8(&tx_buff[0 .. tx_count]).unwrap(), "LIST -l\r\n");
 
   let listing = "-rw-r--r--    1 ftp      ftp          5430 Jul 19  2014 favicon.ico\r
 -rw-r--r--    1 ftp      ftp           660 Nov 02  2015 index.html\r
@@ -78,5 +71,4 @@ drwxr-xr-x    3 ftp      ftp             3 Jul 19  2014 pub\r\n";
   assert_eq!(list[0], RemoteFile { kind: RemoteFileKind::File, size: 5430,  name: "favicon.ico".to_string() } );
   assert_eq!(list[1], RemoteFile { kind: RemoteFileKind::File, size: 660,  name: "index.html".to_string() } );
   assert_eq!(list[2], RemoteFile { kind: RemoteFileKind::Directory, size: 3,  name: "pub".to_string() } );
-
 }

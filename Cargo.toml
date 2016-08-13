@@ -4,6 +4,5 @@ version = "0.1.0"
 authors = ["Ivan Baidakou <basiliscos@openmailbox.org>"]
 
 [dependencies]
-bytebuffer = "0.2.0"
 lazy_static = "0.1"
 regex = "0.1"

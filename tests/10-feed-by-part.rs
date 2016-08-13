@@ -1,5 +1,4 @@
 extern crate protocol_ftp_client;
-extern crate bytebuffer;
 
 use protocol_ftp_client::*;
 use std::str;
@@ -7,6 +6,7 @@ use std::str;
 #[test]
 fn simple_advance() {
   let mut ftp_reciver = FtpReceiver::new();
+
   ftp_reciver = ftp_reciver.try_advance("220-Hi\r\n".as_bytes()).err().unwrap();
   ftp_reciver.try_advance("220 Sample banner comes\r\n".as_bytes()).ok().unwrap();
 }
