@@ -123,7 +123,6 @@ struct FtpInternals {
   system: Option<(String, String)>,
   endpoint: Option<(Ipv4Addr, u16)>,
   buffer: ByteBuffer,
-  data_buffer: ByteBuffer,
   state: Rc<State>,
 }
 
@@ -157,7 +156,6 @@ impl FtpReceiver {
         system: None,
         endpoint: None,
         buffer: ByteBuffer::new(),
-        data_buffer: ByteBuffer::new(),
         state: Rc::new(State::NonAuthorized),
       })
     }
@@ -166,10 +164,6 @@ impl FtpReceiver {
 
   pub fn feed(&mut self, data: &[u8]) {
     Rc::get_mut(&mut self.internals).unwrap().buffer.write_bytes(data);
-  }
-
-  pub fn feed_data(&mut self, data: &[u8]) {
-    Rc::get_mut(&mut self.internals).unwrap().data_buffer.write_bytes(data);
   }
 
 
@@ -497,14 +491,13 @@ impl FtpTransmitter {
     }
   }
 
-  pub fn take_list(&mut self) -> Result<Vec<RemoteFile>, FtpError> {
+  pub fn parse_list(&self, data: &[u8]) -> Result<Vec<RemoteFile>, FtpError> {
 
     lazy_static! {
       static ref RE_LINE: Regex = Regex::new("(?m:^(.+)\r$)").unwrap();
       static ref RE_FILE: Regex = Regex::new("^([d-])(?:[rwx-]{3}){3} +\\d+ +\\w+ +\\w+ +(\\d+) +(.+) +(.+)$").unwrap();
     }
-    let int_ref = Rc::get_mut(&mut self.internals).unwrap();
-    str::from_utf8(int_ref.data_buffer.to_bytes().as_slice())
+    str::from_utf8(data)
       .map_err(|_| FtpError::GarbageData)
       .and_then(|list|{
         let line_captures = RE_LINE.captures_iter(list);

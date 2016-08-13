@@ -69,11 +69,10 @@ fn session_sample() {
 drwxr-xr-x    3 ftp      ftp             3 Jul 19  2014 pub\r\n";
 
   ftp_reciver.feed("150 Here comes the directory listing.\r\n".as_bytes());
-  ftp_reciver.feed_data(listing.as_bytes());
   ftp_reciver.feed("226 Directory send OK.\r\n".as_bytes());
 
   ftp_transmitter = ftp_reciver.try_advance().ok().unwrap();
-  let list = ftp_transmitter.take_list().unwrap();
+  let list = ftp_transmitter.parse_list(listing.as_bytes()).unwrap();
   assert_eq!(list.len(), 3);
   assert_eq!(list[0], RemoteFile { kind: RemoteFileKind::File, size: 5430,  name: "favicon.ico".to_string() } );
   assert_eq!(list[1], RemoteFile { kind: RemoteFileKind::File, size: 660,  name: "index.html".to_string() } );

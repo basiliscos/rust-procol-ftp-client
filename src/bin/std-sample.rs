@@ -7,7 +7,7 @@ use std::net::TcpStream;
 use protocol_ftp_client::*;
 use bytebuffer::ByteBuffer;
 
-fn get_reply(stream:&mut TcpStream, input_buff: &mut [u8; 1024], receiver: FtpReceiver) -> FtpTransmitter {
+fn get_reply(stream:&mut TcpStream, input_buff: &mut [u8], receiver: FtpReceiver) -> FtpTransmitter {
   let mut opt_transmitter = None;
   let mut opt_receiver = Some(receiver);
   while opt_receiver.is_some() {
@@ -88,10 +88,9 @@ fn main() {
 
   let mut data_in = Vec::with_capacity(1024 * 10);
   let _ = data_stream.read_to_end(&mut data_in);
-  ftp_receiver.feed_data(data_in.as_slice());
   transmitter = get_reply(&mut stream, &mut input_buff, ftp_receiver);
   println!("got remote list");
-  for remote_file in transmitter.take_list().unwrap() {
+  for remote_file in transmitter.parse_list(data_in.as_slice()).unwrap() {
     println!("file: {}  / {}", remote_file.name, remote_file.size);
   }
 
