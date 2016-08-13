@@ -2,23 +2,17 @@ extern crate protocol_ftp_client;
 extern crate bytebuffer;
 
 use protocol_ftp_client::*;
-use bytebuffer::ByteBuffer;
 use std::str;
-use std::net::Ipv4Addr;
 
 #[test]
 fn simple_advance() {
-  let mut output = ByteBuffer::new();
   let mut ftp_reciver = FtpReceiver::new();
-  ftp_reciver.feed("220-Hi\r\n".as_bytes());
-  ftp_reciver = ftp_reciver.try_advance().err().unwrap();
-  ftp_reciver.feed("220 Sample banner comes\r\n".as_bytes());
-  ftp_reciver.try_advance().ok().unwrap();
+  ftp_reciver = ftp_reciver.try_advance("220-Hi\r\n".as_bytes()).err().unwrap();
+  ftp_reciver.try_advance("220 Sample banner comes\r\n".as_bytes()).ok().unwrap();
 }
 
 #[test]
 fn cycled_advance() {
-  let mut output = ByteBuffer::new();
   let lines = vec![
     "220-Hi\r\n",
     "220-Second banner line\r\n",
@@ -34,9 +28,8 @@ fn cycled_advance() {
   while recv_opt.is_some() {
     let line = lines[idx];
     idx = idx + 1;
-    let mut ftp_reciver = recv_opt.take().unwrap();
-    ftp_reciver.feed(line.as_bytes());
-    match ftp_reciver.try_advance() {
+    let ftp_reciver = recv_opt.take().unwrap();
+    match ftp_reciver.try_advance(line.as_bytes()) {
       Err(ftp_reciver) => { recv_opt = Some(ftp_reciver); },
       Ok(ftp_transiver) => { trans_opt = Some(ftp_transiver); },
     }

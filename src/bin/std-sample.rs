@@ -10,23 +10,18 @@ use bytebuffer::ByteBuffer;
 fn get_reply(stream:&mut TcpStream, input_buff: &mut [u8], receiver: FtpReceiver) -> FtpTransmitter {
   let mut opt_transmitter = None;
   let mut opt_receiver = Some(receiver);
+  let mut total_size = 0;
   while opt_receiver.is_some() {
     let sz = stream.read(input_buff).unwrap();
-    let mut ftp_receiver = opt_receiver.take().unwrap();
-    ftp_receiver.feed(&input_buff[0 .. sz]);
-    match ftp_receiver.try_advance() {
+    total_size = total_size + sz;
+    let ftp_receiver = opt_receiver.take().unwrap();
+    match ftp_receiver.try_advance(&input_buff[0 .. total_size]) {
       Ok(transmitter) => { opt_transmitter = Some(transmitter) }
       Err(receiver)   => { opt_receiver = Some(receiver) }
     }
   }
   opt_transmitter.unwrap()
 }
-
-/*
-fn send_req(stream:&mut TcpStream, output: &mut ByteBuffer, mut opt_transmitter: Option<FtpTransmitter>) -> Option<FtpReceiver> {
-  write_all
-}
-*/
 
 fn main() {
   println!("starting...");

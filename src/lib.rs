@@ -122,7 +122,6 @@ struct FtpInternals {
   sent_request: Option<Rc<State>>,
   system: Option<(String, String)>,
   endpoint: Option<(Ipv4Addr, u16)>,
-  buffer: ByteBuffer,
   state: Rc<State>,
 }
 
@@ -155,15 +154,9 @@ impl FtpReceiver {
         sent_request: None,
         system: None,
         endpoint: None,
-        buffer: ByteBuffer::new(),
         state: Rc::new(State::NonAuthorized),
       })
     }
-  }
-
-
-  pub fn feed(&mut self, data: &[u8]) {
-    Rc::get_mut(&mut self.internals).unwrap().buffer.write_bytes(data);
   }
 
 
@@ -280,10 +273,10 @@ impl FtpReceiver {
   }
 
 
-  pub fn try_advance(self) -> Result<FtpTransmitter, Self> {
+  pub fn try_advance(self, buffer: &[u8]) -> Result<FtpTransmitter, Self> {
     let mut internals = self.internals;
 
-    let transition_result = FtpReceiver::advance_state(&internals.state, &internals.sent_request, &*internals.buffer.to_bytes().as_slice());
+    let transition_result = FtpReceiver::advance_state(&internals.state, &internals.sent_request, buffer);
 
     match transition_result {
       Err(e) => {
@@ -294,7 +287,6 @@ impl FtpReceiver {
       Ok(new_state) => {
         {
           let mut int_ref = Rc::get_mut(&mut internals).unwrap();
-          int_ref.buffer.clear();
 
           let final_state = match new_state {
             State::PathReceived(path) => {
