@@ -4,8 +4,6 @@ use protocol_ftp_client::*;
 use std::str;
 use std::net::Ipv4Addr;
 
-// 0d0a
-
 #[test]
 fn session_sample() {
   let mut tx_buff:[u8; 1024] = [0; 1024];

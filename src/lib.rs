@@ -17,6 +17,7 @@ const PASSIVE_MODE:u32             = 227;
 const LOGGED_IN:u32                = 230;
 const PATHNAME_AVAILABLE:u32       = 257;
 const PASSWORD_EXPECTED:u32        = 331;
+const AUTHENTICATION_FAILED:u32    = 530;
 
 #[derive(Clone)]
 #[derive(PartialEq)]
@@ -40,6 +41,7 @@ pub enum State {
   Authorized,
   LoginReady,
   LoginReqSent,
+
   PasswordExpected,
   PasswordReqSent,
 
@@ -107,10 +109,12 @@ pub struct RemoteFile {
 }
 
 
+#[derive(PartialEq)]
 pub enum FtpError {
   NotEnoughData,
   ProtocolError(String),
   GarbageData,
+  AuthFailed,
 }
 
 
@@ -139,6 +143,7 @@ impl fmt::Debug for FtpError {
             &FtpError::GarbageData            => write!(f, "garbage data"),
             &FtpError::NotEnoughData          => write!(f, "no enough data"),
             &FtpError::ProtocolError(ref err) => write!(f, "protocol error: {}", err),
+            &FtpError::AuthFailed             => write!(f, "authentication failed"),
         }
     }
 }
@@ -187,6 +192,7 @@ impl FtpReceiver {
               LOGGED_EXPECTED          => Ok(State::LoginReady),
               PASSWORD_EXPECTED        => Ok(State::PasswordExpected),
               LOGGED_IN                => Ok(State::Authorized),
+              AUTHENTICATION_FAILED    => Err(FtpError::AuthFailed),
               OPENNING_DATA_CONNECTION => Ok(State::DataTransferStarted),
               CLOSING_DATA_CONNECTION  => Ok(State::DataTransferCompleted),
               OPERATION_SUCCESS  => {
@@ -279,6 +285,9 @@ impl FtpReceiver {
 
     match transition_result {
       Err(e) => {
+        if &e == &FtpError::AuthFailed {
+          Rc::get_mut(&mut internals).unwrap().state = Rc::new(State::LoginReady);
+        }
         Rc::get_mut(&mut internals).unwrap().error = Some(e);
         Err(FtpReceiver { internals: internals.clone() })
       }
@@ -314,6 +323,15 @@ impl FtpReceiver {
       }
     }
   }
+
+  pub fn take_error(&mut self) -> Option<FtpError> {
+    Rc::get_mut(&mut self.internals).unwrap().error.take()
+  }
+
+  pub fn to_transmitter(self) -> FtpTransmitter {
+    FtpTransmitter { internals: self.internals }
+  }
+
 }
 
 
@@ -334,6 +352,7 @@ impl FtpTransmitter {
 
   pub fn send_login(self, buffer: &mut [u8], count: &mut usize, login: &str) -> FtpReceiver {
     let mut internals = self.internals;
+    let current_state = internals.state.clone();
 
     match &*internals.state {
 
@@ -357,7 +376,7 @@ impl FtpTransmitter {
 
         FtpReceiver { internals: internals }
       },
-      _ => panic!("send_login is not allowed from the current state"),
+      _ => panic!(format!("send_login is not allowed from the {}" , current_state)),
     }
   }
 
