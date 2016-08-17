@@ -15,6 +15,7 @@ const LOGGED_EXPECTED:u32          = 220;
 const CLOSING_DATA_CONNECTION:u32  = 226;
 const PASSIVE_MODE:u32             = 227;
 const LOGGED_IN:u32                = 230;
+const CWD_CONFIRMED:u32            = 250;
 const PATHNAME_AVAILABLE:u32       = 257;
 const PASSWORD_EXPECTED:u32        = 331;
 const AUTHENTICATION_FAILED:u32    = 530;
@@ -48,6 +49,9 @@ pub enum State {
   PwdReqSent,
   PathReceived(String),
 
+  CwdReqSent(String),
+  CwdConfirmed,
+
   DataTypeReqSent(DataMode),
   DataTypeConfirmed(DataMode),
 
@@ -67,6 +71,7 @@ impl fmt::Display for State {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     match self {
       &State::PathReceived(ref value)              => write!(f, "[state: path-received({})]", value),
+      &State::CwdReqSent(ref value)                => write!(f, "[state: cwd-req-sent({})]", value),
       &State::DataTypeReqSent(ref value)           => write!(f, "[state: data-type-req-sent({})]", value),
       &State::DataTypeConfirmed(ref value)         => write!(f, "[state: data-type-confirmed({})]", value),
       &State::SystemRecived(ref name, ref subtype) => write!(f, "[state: system-recieved({}/{})]", name, subtype),
@@ -85,6 +90,7 @@ impl fmt::Display for State {
           &State::ListReqSent           => "list-req-sent",
           &State::DataTransferStarted   => "data-transfer-started",
           &State::DataTransferCompleted => "data-transfer-completed",
+          &State::CwdConfirmed          => "cwd-confirmed",
           _ => unreachable!(),
         };
         write!(f, "[state: {}]", state)
@@ -195,6 +201,7 @@ impl FtpReceiver {
               AUTHENTICATION_FAILED    => Err(FtpError::AuthFailed),
               OPENNING_DATA_CONNECTION => Ok(State::DataTransferStarted),
               CLOSING_DATA_CONNECTION  => Ok(State::DataTransferCompleted),
+              CWD_CONFIRMED            => Ok(State::CwdConfirmed),
               OPERATION_SUCCESS  => {
                 match &*prev_req {
                   &Some(ref prev_sent_req) => {
@@ -266,6 +273,7 @@ impl FtpReceiver {
           (&State::PassiveReqSent, &State::PassiveConfirmed(_, _))     => true,
           (&State::ListReqSent, &State::DataTransferStarted)           => true,
           (&State::DataTransferStarted, &State::DataTransferCompleted) => true,
+          (&State::CwdReqSent(_), &State::CwdConfirmed)                => true,
           _ => false,
         };
         if allowed {
@@ -295,6 +303,7 @@ impl FtpReceiver {
       Ok(new_state) => {
         {
           let mut int_ref = Rc::get_mut(&mut internals).unwrap();
+          let sent_request = int_ref.sent_request.clone();
 
           let final_state = match new_state {
             State::PathReceived(path) => {
@@ -311,6 +320,13 @@ impl FtpReceiver {
             }
             State::PassiveConfirmed(addr, port) => {
               int_ref.endpoint = Some((addr, port));
+              State::Authorized
+            }
+            State::CwdConfirmed => {
+              int_ref.working_dir = match &sent_request.unwrap().as_ref() {
+                &&State::CwdReqSent(ref path) => Some(path.clone()),
+                _ => { unreachable!() },
+              };
               State::Authorized
             }
             _ => new_state,
@@ -345,6 +361,7 @@ lazy_static! {
   static ref DATA_SYST: &'static [u8]        = "SYST\r\n".as_bytes();
   static ref DATA_PASV: &'static [u8]        = "PASV\r\n".as_bytes();
   static ref DATA_LIST: &'static [u8]        = "LIST -l\r\n".as_bytes();
+  static ref DATA_CWD:  &'static [u8]        = "CWD ".as_bytes();
 }
 
 
@@ -512,6 +529,35 @@ impl FtpTransmitter {
       _ => panic!("send_pass_req is not allowed from the {}", internals.state),
     }
   }
+
+  pub fn send_cwd_req(self, buffer: &mut [u8], count: &mut usize, path: &str) -> FtpReceiver {
+    let mut internals = self.internals;
+
+    match &*internals.state {
+      &State::Authorized => {
+        let data_path = path.as_bytes();
+        let mut my_count = 0;
+        unsafe {
+          ptr::copy_nonoverlapping(&DATA_CWD[0], &mut buffer[my_count], DATA_CWD.len());
+          my_count += DATA_CWD.len();
+          ptr::copy_nonoverlapping(&data_path[0], &mut buffer[my_count], path.len());
+          my_count += path.len();
+          ptr::copy_nonoverlapping(&DATA_ENDING[0], &mut buffer[my_count], DATA_ENDING.len());
+        };
+        my_count += DATA_ENDING.len();
+        {
+          let mut int_ref = Rc::get_mut(&mut internals).unwrap();
+          int_ref.state = Rc::new(State::CwdReqSent(path.to_string()));
+          int_ref.sent_request = Some(int_ref.state.clone());
+        }
+        *count = my_count;
+
+        FtpReceiver { internals: internals }
+      },
+      _ => panic!("send_cwd_req is not allowed from the {}", internals.state),
+    }
+  }
+
 
   pub fn take_endpoint(&mut self) -> (Ipv4Addr, u16) {
     match Rc::get_mut(&mut self.internals).unwrap().endpoint.take() {

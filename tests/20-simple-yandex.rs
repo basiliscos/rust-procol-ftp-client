@@ -30,11 +30,6 @@ fn session_sample() {
 ";
   let mut ftp_transmitter = ftp_reciver.try_advance(banner.as_bytes()).ok().unwrap();
 
-  ftp_reciver = ftp_transmitter.send_pwd_req(&mut tx_buff, &mut tx_count);
-  assert_eq!(str::from_utf8(&tx_buff[0 .. tx_count]).unwrap(), "PWD\r\n");
-  ftp_transmitter = ftp_reciver.try_advance("257 \"/\" is the current directory\r\n".as_bytes()).ok().unwrap();
-  assert_eq!(ftp_transmitter.get_wd(), "/");
-
   ftp_reciver = ftp_transmitter.send_type_req(&mut tx_buff, &mut tx_count, DataMode::Binary);
   assert_eq!(str::from_utf8(&tx_buff[0 .. tx_count]).unwrap(), "TYPE I\r\n");
   ftp_transmitter = ftp_reciver.try_advance("200 Switching to Binary mode.\r\n".as_bytes()).ok().unwrap();
@@ -44,6 +39,16 @@ fn session_sample() {
   assert_eq!(str::from_utf8(&tx_buff[0 .. tx_count]).unwrap(), "SYST\r\n");
   ftp_transmitter = ftp_reciver.try_advance("215 UNIX Type: L8\r\n".as_bytes()).ok().unwrap();
   assert_eq!(ftp_transmitter.get_system(), (&"UNIX".to_string(), &"L8".to_string()));
+
+  ftp_reciver = ftp_transmitter.send_pwd_req(&mut tx_buff, &mut tx_count);
+  assert_eq!(str::from_utf8(&tx_buff[0 .. tx_count]).unwrap(), "PWD\r\n");
+  ftp_transmitter = ftp_reciver.try_advance("257 \"/\" is the current directory\r\n".as_bytes()).ok().unwrap();
+  assert_eq!(ftp_transmitter.get_wd(), "/");
+
+  ftp_reciver = ftp_transmitter.send_cwd_req(&mut tx_buff, &mut tx_count, "/pub/FreeBSD/releases/ISO-IMAGES/10.3");
+  assert_eq!(str::from_utf8(&tx_buff[0 .. tx_count]).unwrap(), "CWD /pub/FreeBSD/releases/ISO-IMAGES/10.3\r\n");
+  ftp_transmitter = ftp_reciver.try_advance("250 Directory successfully changed.\r\n".as_bytes()).ok().unwrap();
+  assert_eq!(ftp_transmitter.get_wd(), "/pub/FreeBSD/releases/ISO-IMAGES/10.3");
 
   ftp_reciver = ftp_transmitter.send_pasv_req(&mut tx_buff, &mut tx_count);
   assert_eq!(str::from_utf8(&tx_buff[0 .. tx_count]).unwrap(), "PASV\r\n");
