@@ -64,9 +64,7 @@ fn session_sample() {
 drwxr-xr-x    3 ftp      ftp             3 Jul 19  2014 pub\r\n";
 
 
-  let listing_tx = "150 Here comes the directory listing.\r
-226 Directory send OK.\r
-";
+  let listing_tx = "150 Here comes the directory listing.\r\n";
 
   ftp_transmitter = ftp_reciver.try_advance(listing_tx.as_bytes()).ok().unwrap();
   let list = ftp_transmitter.parse_list(listing.as_bytes()).unwrap();
@@ -74,4 +72,16 @@ drwxr-xr-x    3 ftp      ftp             3 Jul 19  2014 pub\r\n";
   assert_eq!(list[0], RemoteFile { kind: RemoteFileKind::File, size: 5430,  name: "favicon.ico".to_string() } );
   assert_eq!(list[1], RemoteFile { kind: RemoteFileKind::File, size: 660,  name: "index.html".to_string() } );
   assert_eq!(list[2], RemoteFile { kind: RemoteFileKind::Directory, size: 3,  name: "pub".to_string() } );
+
+  ftp_transmitter = ftp_transmitter.to_receiver().try_advance("226 Directory send OK.\r\n".as_bytes())
+    .ok().unwrap();
+
+  ftp_reciver = ftp_transmitter.send_get_req(&mut tx_buff, &mut tx_count, "/a/b/favicon.ico");
+  assert_eq!(str::from_utf8(&tx_buff[0 .. tx_count]).unwrap(), "RETR /a/b/favicon.ico\r\n");
+
+  let _ = ftp_reciver.try_advance("150 Opening BINARY mode data connection for /a/b/favicon.ico (4259 bytes).\r\n".as_bytes())
+    .ok().unwrap()
+    .to_receiver().try_advance("226 Transfer complete\r\n".as_bytes()).ok().unwrap();
+  ;
+
 }

@@ -62,6 +62,7 @@ pub enum State {
   PassiveConfirmed(Ipv4Addr, u16),
 
   ListReqSent,
+  FileReqSent,
 
   DataTransferStarted,
   DataTransferCompleted,
@@ -88,6 +89,7 @@ impl fmt::Display for State {
           &State::SystemReqSent         => "system-req-sent",
           &State::PassiveReqSent        => "passive-req-sent",
           &State::ListReqSent           => "list-req-sent",
+          &State::FileReqSent           => "file-req-sent",
           &State::DataTransferStarted   => "data-transfer-started",
           &State::DataTransferCompleted => "data-transfer-completed",
           &State::CwdConfirmed          => "cwd-confirmed",
@@ -257,7 +259,7 @@ impl FtpReceiver {
                     Ok(State::PassiveConfirmed(addr, port))
                   })
               }
-              _ => unimplemented!(),
+              _ => panic!(format!("unknown responce: {}", response))
             }
           })
       )
@@ -272,6 +274,7 @@ impl FtpReceiver {
           (&State::SystemReqSent, &State::SystemRecived(_, _))         => true,
           (&State::PassiveReqSent, &State::PassiveConfirmed(_, _))     => true,
           (&State::ListReqSent, &State::DataTransferStarted)           => true,
+          (&State::FileReqSent, &State::DataTransferStarted)           => true,
           (&State::DataTransferStarted, &State::DataTransferCompleted) => true,
           (&State::CwdReqSent(_), &State::CwdConfirmed)                => true,
           _ => false,
@@ -293,6 +296,7 @@ impl FtpReceiver {
 
     match transition_result {
       Err(e) => {
+        println!("error on state: {}", internals.state);
         if &e == &FtpError::AuthFailed {
           Rc::get_mut(&mut internals).unwrap().state = Rc::new(State::LoginReady);
         }
@@ -329,6 +333,9 @@ impl FtpReceiver {
               };
               State::Authorized
             }
+            State::DataTransferCompleted => {
+              State::Authorized
+            }
             _ => new_state,
           };
 
@@ -362,10 +369,15 @@ lazy_static! {
   static ref DATA_PASV: &'static [u8]        = "PASV\r\n".as_bytes();
   static ref DATA_LIST: &'static [u8]        = "LIST -l\r\n".as_bytes();
   static ref DATA_CWD:  &'static [u8]        = "CWD ".as_bytes();
+  static ref DATA_RETR: &'static [u8]        = "RETR ".as_bytes();
 }
 
 
 impl FtpTransmitter {
+
+  pub fn to_receiver(self) -> FtpReceiver {
+    FtpReceiver { internals: self.internals }
+  }
 
   pub fn send_login(self, buffer: &mut [u8], count: &mut usize, login: &str) -> FtpReceiver {
     let mut internals = self.internals;
@@ -526,9 +538,38 @@ impl FtpTransmitter {
 
         FtpReceiver { internals: internals }
       },
-      _ => panic!("send_pass_req is not allowed from the {}", internals.state),
+      _ => panic!("send_pasv_req is not allowed from the {}", internals.state),
     }
   }
+
+  pub fn send_get_req(self, buffer: &mut [u8], count: &mut usize, file_path: &str) -> FtpReceiver {
+    let mut internals = self.internals;
+
+    match &*internals.state {
+      &State::Authorized => {
+        let data_path = file_path.as_bytes();
+        let mut my_count = 0;
+        unsafe {
+          ptr::copy_nonoverlapping(&DATA_RETR[0], &mut buffer[my_count], DATA_RETR.len());
+          my_count += DATA_RETR.len();
+          ptr::copy_nonoverlapping(&data_path[0], &mut buffer[my_count], data_path.len());
+          my_count += data_path.len();
+          ptr::copy_nonoverlapping(&DATA_ENDING[0], &mut buffer[my_count], DATA_ENDING.len());
+        };
+        my_count += DATA_ENDING.len();
+        {
+          let mut int_ref = Rc::get_mut(&mut internals).unwrap();
+          int_ref.state = Rc::new(State::FileReqSent);
+          int_ref.sent_request = Some(int_ref.state.clone());
+        }
+        *count = my_count;
+
+        FtpReceiver { internals: internals }
+      },
+      _ => panic!("send_get_req is not allowed from the {}", internals.state),
+    }
+  }
+
 
   pub fn send_cwd_req(self, buffer: &mut [u8], count: &mut usize, path: &str) -> FtpReceiver {
     let mut internals = self.internals;
