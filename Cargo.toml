@@ -6,3 +6,4 @@ authors = ["Ivan Baidakou <basiliscos@openmailbox.org>"]
 [dependencies]
 lazy_static = "0.1"
 regex = "0.1"
+url = "1.2.0"

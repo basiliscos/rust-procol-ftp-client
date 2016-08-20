@@ -125,6 +125,16 @@ pub enum FtpError {
   AuthFailed,
 }
 
+impl fmt::Display for FtpError {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    match self {
+      &FtpError::NotEnoughData        => { write!(f, "[no enough data]") }
+      &FtpError::AuthFailed           => { write!(f, "[authorization failed]") }
+      &FtpError::GarbageData          => { write!(f, "[garbage]") }
+      &FtpError::ProtocolError(ref s) => { write!(f, "[protocol error: {}]", s) }
+    }
+  }
+}
 
 struct FtpInternals {
   error: Option<FtpError>,
