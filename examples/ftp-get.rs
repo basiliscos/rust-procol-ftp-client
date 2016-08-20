@@ -37,8 +37,15 @@ fn main() {
   println!("url: {}", url);
   let ftp_url = Url::parse(&url).unwrap();
   assert!(ftp_url.scheme() == "ftp");
-  assert!(ftp_url.username() != "");
-  assert!(ftp_url.password() != None);
+
+  let mut username = ftp_url.username();
+  if username == "" { username = "anonymous" };
+
+  let password = match ftp_url.password() {
+    Some(value) => value,
+    None        => "unspecified",
+  };
+
   assert!(ftp_url.path() != "");
 
   let host = ftp_url.host().unwrap();
@@ -61,14 +68,14 @@ fn main() {
   let mut transmitter = get_reply(&mut stream, &mut rx_buff, ftp_receiver);
   println!("connected to {}:{}", host, port);
 
-  ftp_receiver = transmitter.send_login(&mut tx_buff, &mut tx_count, "anonymous");
+  ftp_receiver = transmitter.send_login(&mut tx_buff, &mut tx_count, username);
   let _ = stream.write_all(&tx_buff[0 .. tx_count]).unwrap();
   println!("login sent...");
 
   transmitter = get_reply(&mut stream, &mut rx_buff, ftp_receiver);
   println!("expecting password...");
 
-  ftp_receiver = transmitter.send_password(&mut tx_buff, &mut tx_count, "anonymous@nowhere.com");
+  ftp_receiver = transmitter.send_password(&mut tx_buff, &mut tx_count, password);
   let _ = stream.write_all(&tx_buff[0 .. tx_count]).unwrap();
   println!("password sent...");
 
@@ -121,7 +128,7 @@ fn main() {
     let count = data_stream.read(&mut data_in).unwrap();
     // println!("got {} bytes", count);
     eof = count == 0;
-    if !eof { local_file.write(&data_in[0 .. count]); };
+    if !eof { let _ = local_file.write(&data_in[0 .. count]).unwrap(); };
   }
   local_file.flush().unwrap();
   println!("");
