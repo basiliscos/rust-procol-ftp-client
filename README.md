@@ -1,4 +1,4 @@
-# rust-procol-ftp-client
+# procol-ftp-client
 FTP protocol parser (client side)
 
 The FTP prorocol parser intended to be network transport layer neytral and suitable to use with standard rust 
@@ -8,6 +8,19 @@ as well as asynchronous framework such as [mio](https://github.com/carllerche/mi
 # Status
 
 alpha
+
+# Usage
+
+To use `procol_ftp_client`, first add this to your `Cargo.toml`:
+
+```toml
+[dependencies]
+protocol_ftp_client = "0.1"
+```
+
+# API
+
+TODO
 
 # Licence
 
