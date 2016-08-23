@@ -1,6 +1,8 @@
 # procol-ftp-client
 FTP protocol parser (client side)
 
+[![Build Status](https://travis-ci.org/basiliscos/rust-procol-ftp-client.svg?branch=master)](https://travis-ci.org/basiliscos/rust-procol-ftp-client.svg)
+
 The FTP prorocol parser intended to be network transport layer neytral and suitable to use with standard rust 
 [TcpStream](https://doc.rust-lang.org/std/net/struct.TcpStream.html) 
 as well as asynchronous framework such as [mio](https://github.com/carllerche/mio).
