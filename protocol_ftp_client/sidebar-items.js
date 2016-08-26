@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["DataMode",""],["FtpError",""],["RemoteFileKind",""],["State",""]],"struct":[["FtpReceiver",""],["FtpTransmitter",""],["RemoteFile",""]]});

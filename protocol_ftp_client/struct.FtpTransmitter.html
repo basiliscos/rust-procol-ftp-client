@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `FtpTransmitter` struct in crate `protocol_ftp_client`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, FtpTransmitter">
+
+    <title>protocol_ftp_client::FtpTransmitter - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../rustdoc.css">
+    <link rel="stylesheet" type="text/css" href="../main.css">
+    
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <nav class="sidebar">
+        
+        <p class='location'><a href='index.html'>protocol_ftp_client</a></p><script>window.sidebarCurrent = {name: 'FtpTransmitter', ty: 'struct', relpath: ''};</script><script defer src="sidebar-items.js"></script>
+    </nav>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press ‘S’ to search, ‘?’ for more options…"
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content struct">
+<h1 class='fqn'><span class='in-band'>Struct <a href='index.html'>protocol_ftp_client</a>::<wbr><a class='struct' href=''>FtpTransmitter</a></span><span class='out-of-band'><span id='render-detail'>
+                   <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                       [<span class='inner'>&#x2212;</span>]
+                   </a>
+               </span><a id='src-193' class='srclink' href='../src/protocol_ftp_client/src/lib.rs.html#153-155' title='goto source code'>[src]</a></span></h1>
+<pre class='rust struct'>pub struct FtpTransmitter {
+    // some fields omitted
+}</pre><h2 id='methods'>Methods</h2><h3 class='impl'><span class='in-band'><code>impl <a class='struct' href='../protocol_ftp_client/struct.FtpTransmitter.html' title='protocol_ftp_client::FtpTransmitter'>FtpTransmitter</a></code></span><span class='out-of-band'><div class='ghost'></div><a id='src-599' class='srclink' href='../src/protocol_ftp_client/src/lib.rs.html#386-682' title='goto source code'>[src]</a></span></h3>
+<div class='impl-items'><h4 id='method.to_receiver' class='method'><span id='to_receiver.v' class='invisible'><code>fn <a href='#method.to_receiver' class='fnname'>to_receiver</a>(self) -&gt; <a class='struct' href='../protocol_ftp_client/struct.FtpReceiver.html' title='protocol_ftp_client::FtpReceiver'>FtpReceiver</a></code></span></h4>
+<h4 id='method.send_login' class='method'><span id='send_login.v' class='invisible'><code>fn <a href='#method.send_login' class='fnname'>send_login</a>(self, buffer: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.slice.html'>&amp;mut [</a><a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.u8.html'>u8</a><a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.slice.html'>]</a>, count: &amp;mut <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>, login: &amp;<a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.str.html'>str</a>) -&gt; <a class='struct' href='../protocol_ftp_client/struct.FtpReceiver.html' title='protocol_ftp_client::FtpReceiver'>FtpReceiver</a></code></span></h4>
+<h4 id='method.send_password' class='method'><span id='send_password.v' class='invisible'><code>fn <a href='#method.send_password' class='fnname'>send_password</a>(self, buffer: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.slice.html'>&amp;mut [</a><a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.u8.html'>u8</a><a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.slice.html'>]</a>, count: &amp;mut <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>, pass: &amp;<a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.str.html'>str</a>) -&gt; <a class='struct' href='../protocol_ftp_client/struct.FtpReceiver.html' title='protocol_ftp_client::FtpReceiver'>FtpReceiver</a></code></span></h4>
+<h4 id='method.send_pwd_req' class='method'><span id='send_pwd_req.v' class='invisible'><code>fn <a href='#method.send_pwd_req' class='fnname'>send_pwd_req</a>(self, buffer: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.slice.html'>&amp;mut [</a><a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.u8.html'>u8</a><a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.slice.html'>]</a>, count: &amp;mut <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>) -&gt; <a class='struct' href='../protocol_ftp_client/struct.FtpReceiver.html' title='protocol_ftp_client::FtpReceiver'>FtpReceiver</a></code></span></h4>
+<h4 id='method.get_wd' class='method'><span id='get_wd.v' class='invisible'><code>fn <a href='#method.get_wd' class='fnname'>get_wd</a>(&amp;self) -&gt; &amp;<a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.str.html'>str</a></code></span></h4>
+<h4 id='method.send_type_req' class='method'><span id='send_type_req.v' class='invisible'><code>fn <a href='#method.send_type_req' class='fnname'>send_type_req</a>(self, buffer: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.slice.html'>&amp;mut [</a><a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.u8.html'>u8</a><a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.slice.html'>]</a>, count: &amp;mut <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>, data_type: <a class='enum' href='../protocol_ftp_client/enum.DataMode.html' title='protocol_ftp_client::DataMode'>DataMode</a>) -&gt; <a class='struct' href='../protocol_ftp_client/struct.FtpReceiver.html' title='protocol_ftp_client::FtpReceiver'>FtpReceiver</a></code></span></h4>
+<h4 id='method.get_type' class='method'><span id='get_type.v' class='invisible'><code>fn <a href='#method.get_type' class='fnname'>get_type</a>(&amp;self) -&gt; &amp;<a class='enum' href='../protocol_ftp_client/enum.DataMode.html' title='protocol_ftp_client::DataMode'>DataMode</a></code></span></h4>
+<h4 id='method.send_system_req' class='method'><span id='send_system_req.v' class='invisible'><code>fn <a href='#method.send_system_req' class='fnname'>send_system_req</a>(self, buffer: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.slice.html'>&amp;mut [</a><a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.u8.html'>u8</a><a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.slice.html'>]</a>, count: &amp;mut <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>) -&gt; <a class='struct' href='../protocol_ftp_client/struct.FtpReceiver.html' title='protocol_ftp_client::FtpReceiver'>FtpReceiver</a></code></span></h4>
+<h4 id='method.get_system' class='method'><span id='get_system.v' class='invisible'><code>fn <a href='#method.get_system' class='fnname'>get_system</a>(&amp;self) -&gt; <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.tuple.html'>(</a>&amp;<a class='struct' href='https://doc.rust-lang.org/nightly/collections/string/struct.String.html' title='collections::string::String'>String</a>, &amp;<a class='struct' href='https://doc.rust-lang.org/nightly/collections/string/struct.String.html' title='collections::string::String'>String</a><a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.tuple.html'>)</a></code></span></h4>
+<h4 id='method.send_pasv_req' class='method'><span id='send_pasv_req.v' class='invisible'><code>fn <a href='#method.send_pasv_req' class='fnname'>send_pasv_req</a>(self, buffer: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.slice.html'>&amp;mut [</a><a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.u8.html'>u8</a><a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.slice.html'>]</a>, count: &amp;mut <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>) -&gt; <a class='struct' href='../protocol_ftp_client/struct.FtpReceiver.html' title='protocol_ftp_client::FtpReceiver'>FtpReceiver</a></code></span></h4>
+<h4 id='method.send_get_req' class='method'><span id='send_get_req.v' class='invisible'><code>fn <a href='#method.send_get_req' class='fnname'>send_get_req</a>(self, buffer: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.slice.html'>&amp;mut [</a><a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.u8.html'>u8</a><a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.slice.html'>]</a>, count: &amp;mut <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>, file_path: &amp;<a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.str.html'>str</a>) -&gt; <a class='struct' href='../protocol_ftp_client/struct.FtpReceiver.html' title='protocol_ftp_client::FtpReceiver'>FtpReceiver</a></code></span></h4>
+<h4 id='method.send_cwd_req' class='method'><span id='send_cwd_req.v' class='invisible'><code>fn <a href='#method.send_cwd_req' class='fnname'>send_cwd_req</a>(self, buffer: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.slice.html'>&amp;mut [</a><a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.u8.html'>u8</a><a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.slice.html'>]</a>, count: &amp;mut <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>, path: &amp;<a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.str.html'>str</a>) -&gt; <a class='struct' href='../protocol_ftp_client/struct.FtpReceiver.html' title='protocol_ftp_client::FtpReceiver'>FtpReceiver</a></code></span></h4>
+<h4 id='method.take_endpoint' class='method'><span id='take_endpoint.v' class='invisible'><code>fn <a href='#method.take_endpoint' class='fnname'>take_endpoint</a>(&amp;mut self) -&gt; <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.tuple.html'>(</a><a class='struct' href='https://doc.rust-lang.org/nightly/std/net/ip/struct.Ipv4Addr.html' title='std::net::ip::Ipv4Addr'>Ipv4Addr</a>, <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.u16.html'>u16</a><a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.tuple.html'>)</a></code></span></h4>
+<h4 id='method.send_list_req' class='method'><span id='send_list_req.v' class='invisible'><code>fn <a href='#method.send_list_req' class='fnname'>send_list_req</a>(self, buffer: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.slice.html'>&amp;mut [</a><a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.u8.html'>u8</a><a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.slice.html'>]</a>, count: &amp;mut <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a>) -&gt; <a class='struct' href='../protocol_ftp_client/struct.FtpReceiver.html' title='protocol_ftp_client::FtpReceiver'>FtpReceiver</a></code></span></h4>
+<h4 id='method.parse_list' class='method'><span id='parse_list.v' class='invisible'><code>fn <a href='#method.parse_list' class='fnname'>parse_list</a>(&amp;self, data: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.slice.html'>&amp;[</a><a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.u8.html'>u8</a><a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.slice.html'>]</a>) -&gt; <a class='enum' href='https://doc.rust-lang.org/nightly/core/result/enum.Result.html' title='core::result::Result'>Result</a>&lt;<a class='struct' href='https://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;<a class='struct' href='../protocol_ftp_client/struct.RemoteFile.html' title='protocol_ftp_client::RemoteFile'>RemoteFile</a>&gt;,&nbsp;<a class='enum' href='../protocol_ftp_client/enum.FtpError.html' title='protocol_ftp_client::FtpError'>FtpError</a>&gt;</code></span></h4>
+</div></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <aside id="help" class="hidden">
+        <div>
+            <h1 class="hidden">Help</h1>
+
+            <div class="shortcuts">
+                <h2>Keyboard Shortcuts</h2>
+
+                <dl>
+                    <dt>?</dt>
+                    <dd>Show this help dialog</dd>
+                    <dt>S</dt>
+                    <dd>Focus the search field</dd>
+                    <dt>&larrb;</dt>
+                    <dd>Move up in search results</dd>
+                    <dt>&rarrb;</dt>
+                    <dd>Move down in search results</dd>
+                    <dt>&#9166;</dt>
+                    <dd>Go to active search result</dd>
+                    <dt>+</dt>
+                    <dd>Collapse/expand all sections</dd>
+                </dl>
+            </div>
+
+            <div class="infos">
+                <h2>Search Tricks</h2>
+
+                <p>
+                    Prefix searches with a type followed by a colon (e.g.
+                    <code>fn:</code>) to restrict the search to a given type.
+                </p>
+
+                <p>
+                    Accepted types are: <code>fn</code>, <code>mod</code>,
+                    <code>struct</code>, <code>enum</code>,
+                    <code>trait</code>, <code>type</code>, <code>macro</code>,
+                    and <code>const</code>.
+                </p>
+
+                <p>
+                    Search functions by type signature (e.g.
+                    <code>vec -> usize</code> or <code>* -> vec</code>)
+                </p>
+            </div>
+        </div>
+    </aside>
+
+    
+
+    <script>
+        window.rootPath = "../";
+        window.currentCrate = "protocol_ftp_client";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../jquery.js"></script>
+    <script src="../main.js"></script>
+    
+    <script defer src="../search-index.js"></script>
+</body>
+</html>
