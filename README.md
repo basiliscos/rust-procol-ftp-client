@@ -22,7 +22,7 @@ protocol_ftp_client = "0.1"
 
 # API
 
-TODO
+[documentatil)(https://basiliscos.github.io/rust-procol-ftp-client/protocol_ftp_client/index.html)
 
 # Licence
 
