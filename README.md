@@ -20,6 +20,8 @@ To use `procol_ftp_client`, first add this to your `Cargo.toml`:
 protocol_ftp_client = "0.1"
 ```
 
+See [example](https://github.com/basiliscos/rust-procol-ftp-client/blob/master/examples/ftp-get.rs) how to build ftp-get command using `TcpStream` of standart library
+
 # API
 
 [documentation](https://basiliscos.github.io/rust-procol-ftp-client/protocol_ftp_client/index.html)
