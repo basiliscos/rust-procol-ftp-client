@@ -21,7 +21,7 @@ const PASSWORD_EXPECTED:u32        = 331;
 const AUTHENTICATION_FAILED:u32    = 530;
 
 
-/// Defines data transfer mode: binary (aka image) or text
+/// Defines data transfer mode: binary (aka image) or text.
 #[derive(Clone)]
 #[derive(PartialEq)]
 #[derive(Debug)]
@@ -103,7 +103,7 @@ impl fmt::Display for State {
   }
 }
 
-/// Defines files type for parsed `LIST` command
+/// Defines files type for parsed `LIST` command.
 #[derive(PartialEq)]
 #[derive(Debug)]
 pub enum RemoteFileKind {
@@ -111,7 +111,7 @@ pub enum RemoteFileKind {
   Directory,
 }
 
-/// Represents single itme parsed `LIST` command
+/// Represents single item parsed `LIST` command.
 #[derive(PartialEq)]
 #[derive(Debug)]
 pub struct RemoteFile {
@@ -121,15 +121,15 @@ pub struct RemoteFile {
 }
 
 #[derive(PartialEq)]
-/// Error ocur in parsing FTP data
+/// Error occured in parsing FTP data.
 pub enum FtpError {
-  /// No enoght data has been provided
+  /// No enough data has been provided.
   NotEnoughData,
-  /// Protocol error occur, i.e. got `A` while expected `B`
+  /// Protocol error occur, i.e. got `A` while expected `B`.
   ProtocolError(String),
-  /// Some meaningless data
+  /// Some meaningless data.
   GarbageData,
-  /// Failed to authenticate
+  /// Failed to authenticate.
   AuthFailed,
 }
 
@@ -155,15 +155,15 @@ struct FtpInternals {
 }
 
 /// "Passive" side of FTP protocol, which mean that receiver expects
-/// some data from remote server. As soon as it recieves enought data
+/// some data from remote server. As soon as it receives enough data
 /// it can "advance" to transmitter state, i.e. fill buffer with
-/// commands to be furhter send to the remote server
+/// commands to be further sent to the remote server.
 pub struct FtpReceiver {
   internals: Rc<FtpInternals>
 }
 
 /// "Active" side of FTP protocol, i.e. fill buffer with desired
-/// FTP commands for further delivery to remote server
+/// FTP commands for further delivery to remote server.
 pub struct FtpTransmitter {
   internals: Rc<FtpInternals>
 }
@@ -313,12 +313,12 @@ impl FtpReceiver {
   }
 
 
-  /// Try to consume `Reciver` by parsing buffer and andvacne into `Transmitter`.
-  /// In the case of error, it returns unmodified `Reciver` as the error. The
-  /// actually happen error can be obtatied via `take_error`
+  /// Try to consume `Receiver` by parsing buffer and advance into `Transmitter`.
+  /// In the case of an error, it returns unmodified `Receiver` as the error. The
+  /// actually happened error can be obtained via `take_error`.
   ///
-  /// In case of success it remembers the last successfull state, probably switches
-  /// it and returns `Transmitter` object
+  /// In case of success it remembers the last successful state, probably switches
+  /// it and returns `Transmitter` object.
   pub fn try_advance(self, buffer: &[u8]) -> Result<FtpTransmitter, Self> {
     let mut internals = self.internals;
 
@@ -378,14 +378,14 @@ impl FtpReceiver {
   }
 
   /// Returns tha last occurred error, and internally
-  /// sets up `None`
+  /// sets up `None`.
   pub fn take_error(&mut self) -> Option<FtpError> {
     Rc::get_mut(&mut self.internals).unwrap().error.take()
   }
 
-  /// Sometimes you need manually advance to `Transmitter`
+  /// Sometimes you need to manually advance to `Transmitter`
   /// e.g. in case of Authorization Error, you can re-send
-  /// other credentials
+  /// other credentials.
   pub fn to_transmitter(self) -> FtpTransmitter {
     FtpTransmitter { internals: self.internals }
   }
@@ -410,15 +410,15 @@ lazy_static! {
 
 impl FtpTransmitter {
 
-  /// Sometimes you need manually advance to `Reciever`
+  /// Sometimes you need to manually advance to `Receiver`
   /// e.g. in case of `LIST` or file get commands, servers sends
-  /// start data transfer and end data transfer responces
+  /// start data transfer and end data transfer responses.
   pub fn to_receiver(self) -> FtpReceiver {
     FtpReceiver { internals: self.internals }
   }
 
   /// Fills the output buffer with the login command (takes `login` string argument ),
-  /// modifies `count` variable with the count of written bytes and return `FtpReceiver`
+  /// modifies `count` variable with the count of written bytes and returns `FtpReceiver`.
   pub fn send_login(self, buffer: &mut [u8], count: &mut usize, login: &str) -> FtpReceiver {
     let mut internals = self.internals;
     let current_state = internals.state.clone();
@@ -450,7 +450,7 @@ impl FtpTransmitter {
   }
 
   /// Fills the output buffer with the password command (takes `password` string argument ),
-  /// modifies `count` variable with the count of written bytes and return `FtpReceiver`
+  /// modifies `count` variable with the count of written bytes and returns `FtpReceiver`.
   pub fn send_password(self, buffer: &mut [u8], count: &mut usize, pass: &str) -> FtpReceiver {
     let mut internals = self.internals;
 
@@ -480,7 +480,7 @@ impl FtpTransmitter {
   }
 
   /// Fills the output buffer with the PWD command (take current working directory on remote server),
-  /// modifies `count` variable with the count of written bytes and return `FtpReceiver`
+  /// modifies `count` variable with the count of written bytes and returns `FtpReceiver`.
   pub fn send_pwd_req(self, buffer: &mut [u8], count: &mut usize) -> FtpReceiver {
     let mut internals = self.internals;
 
@@ -501,7 +501,7 @@ impl FtpTransmitter {
   }
 
   /// Returns current working directory. Assumes either that  `send_pwd_req` or `send_cwd_req`
-  /// has been send and succeeded
+  /// has been sent and succeeded.
   pub fn get_wd(&self) -> &str {
     match &self.internals.working_dir {
       &Some(ref path) => &path,
@@ -510,7 +510,7 @@ impl FtpTransmitter {
   }
 
   /// Fills the output buffer with the data transfer mode request (binary or text),
-  /// modifies `count` variable with the count of written bytes and return `FtpReceiver`
+  /// modifies `count` variable with the count of written bytes and returns `FtpReceiver`.
   pub fn send_type_req(self, buffer: &mut [u8], count: &mut usize, data_type: DataMode) -> FtpReceiver {
     let mut internals = self.internals;
 
@@ -539,7 +539,7 @@ impl FtpTransmitter {
   }
 
   /// Returns current data mode. Assumes either that  `send_type_req`
-  /// has been send and succeeded
+  /// has been sent and succeeded.
   pub fn get_type(&self) -> &DataMode {
     match &self.internals.data_mode {
       &Some(ref mode) => &mode,
@@ -548,7 +548,7 @@ impl FtpTransmitter {
   }
 
   /// Fills the output buffer with the remote system request;
-  /// modifies `count` variable with the count of written bytes and return `FtpReceiver`
+  /// modifies `count` variable with the count of written bytes and returns `FtpReceiver`.
   pub fn send_system_req(self, buffer: &mut [u8], count: &mut usize) -> FtpReceiver {
     let mut internals = self.internals;
 
@@ -569,7 +569,7 @@ impl FtpTransmitter {
   }
 
   /// Returns remote system with subtype. Assumes either that `send_system_req`
-  /// has been send and succeeded
+  /// has been sent and succeeded.
   pub fn get_system(&self) -> (&String, &String) {
     match &self.internals.system {
       &Some((ref name, ref subtype)) => (&name, &subtype),
@@ -577,8 +577,8 @@ impl FtpTransmitter {
     }
   }
 
-  /// Fills the output buffer with the PASS requests to allow further data traspher (`LIST` or get file)
-  /// modifies `count` variable with the count of written bytes and return `FtpReceiver`
+  /// Fills the output buffer with the PASS requests to allow further data transfer (`LIST` or get file)
+  /// modifies `count` variable with the count of written bytes and returns `FtpReceiver`.
   pub fn send_pasv_req(self, buffer: &mut [u8], count: &mut usize) -> FtpReceiver {
     let mut internals = self.internals;
 
@@ -599,7 +599,7 @@ impl FtpTransmitter {
   }
 
   /// Fills the output buffer with get remove file command (takes `path` string argument ),
-  /// modifies `count` variable with the count of written bytes and return `FtpReceiver`
+  /// modifies `count` variable with the count of written bytes and returns `FtpReceiver`.
   pub fn send_get_req(self, buffer: &mut [u8], count: &mut usize, file_path: &str) -> FtpReceiver {
     let mut internals = self.internals;
 
@@ -630,7 +630,7 @@ impl FtpTransmitter {
 
 
   /// Fills the output buffer with change remote working directory command (takes `path` string argument ),
-  /// modifies `count` variable with the count of written bytes and return `FtpReceiver`
+  /// modifies `count` variable with the count of written bytes and returns `FtpReceiver`.
   pub fn send_cwd_req(self, buffer: &mut [u8], count: &mut usize, path: &str) -> FtpReceiver {
     let mut internals = self.internals;
 
@@ -660,8 +660,8 @@ impl FtpTransmitter {
   }
 
 
-  /// Takes IP-address and port pair, where TCP-connection can be opened to.
-  /// Assumes `send_pasv_req` has been invoked before
+  /// Takes pair of IP-address and port, where TCP-connection can be opened to.
+  /// Assumes `send_pasv_req` has been invoked before.
   pub fn take_endpoint(&mut self) -> (Ipv4Addr, u16) {
     match Rc::get_mut(&mut self.internals).unwrap().endpoint.take() {
       Some((addr, port)) => (addr, port),
@@ -670,7 +670,7 @@ impl FtpTransmitter {
   }
 
   /// Fills the output buffer with `LIST` command to get directory listing of current remote working directory;
-  /// modifies `count` variable with the count of written bytes and return `FtpReceiver`
+  /// modifies `count` variable with the count of written bytes and returns `FtpReceiver`.
   pub fn send_list_req(self, buffer: &mut [u8], count: &mut usize) -> FtpReceiver {
     let mut internals = self.internals;
 
@@ -689,7 +689,7 @@ impl FtpTransmitter {
     }
   }
 
-  /// Parses remote directory listing, requested by `send_list_req` command
+  /// Parses remote directory listing, requested by `send_list_req` command.
   pub fn parse_list(&self, data: &[u8]) -> Result<Vec<RemoteFile>, FtpError> {
 
     lazy_static! {
