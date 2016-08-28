@@ -51,25 +51,25 @@
 <pre class='rust struct'>pub struct FtpReceiver {
     // some fields omitted
 }</pre><div class='docblock'><p>&quot;Passive&quot; side of FTP protocol, which mean that receiver expects
-some data from remote server. As soon as it recieves enought data
+some data from remote server. As soon as it receives enough data
 it can &quot;advance&quot; to transmitter state, i.e. fill buffer with
-commands to be furhter send to the remote server</p>
+commands to be further sent to the remote server.</p>
 </div><h2 id='methods'>Methods</h2><h3 class='impl'><span class='in-band'><code>impl <a class='struct' href='../protocol_ftp_client/struct.FtpReceiver.html' title='protocol_ftp_client::FtpReceiver'>FtpReceiver</a></code></span><span class='out-of-band'><div class='ghost'></div><a id='src-205' class='srclink' href='../src/protocol_ftp_client/src/lib.rs.html#183-393' title='goto source code'>[src]</a></span></h3>
 <div class='impl-items'><h4 id='method.new' class='method'><span id='new.v' class='invisible'><code>fn <a href='#method.new' class='fnname'>new</a>() -&gt; Self</code></span></h4>
 <h4 id='method.try_advance' class='method'><span id='try_advance.v' class='invisible'><code>fn <a href='#method.try_advance' class='fnname'>try_advance</a>(self, buffer: <a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.slice.html'>&amp;[</a><a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.u8.html'>u8</a><a class='primitive' href='https://doc.rust-lang.org/nightly/std/primitive.slice.html'>]</a>) -&gt; <a class='enum' href='https://doc.rust-lang.org/nightly/core/result/enum.Result.html' title='core::result::Result'>Result</a>&lt;<a class='struct' href='../protocol_ftp_client/struct.FtpTransmitter.html' title='protocol_ftp_client::FtpTransmitter'>FtpTransmitter</a>,&nbsp;Self&gt;</code></span></h4>
-<div class='docblock'><p>Try to consume <code>Reciver</code> by parsing buffer and andvacne into <code>Transmitter</code>.
-In the case of error, it returns unmodified <code>Reciver</code> as the error. The
-actually happen error can be obtatied via <code>take_error</code></p>
+<div class='docblock'><p>Try to consume <code>Receiver</code> by parsing buffer and advance into <code>Transmitter</code>.
+In the case of an error, it returns unmodified <code>Receiver</code> as the error. The
+actually happened error can be obtained via <code>take_error</code>.</p>
 
-<p>In case of success it remembers the last successfull state, probably switches
-it and returns <code>Transmitter</code> object</p>
+<p>In case of success it remembers the last successful state, probably switches
+it and returns <code>Transmitter</code> object.</p>
 </div><h4 id='method.take_error' class='method'><span id='take_error.v' class='invisible'><code>fn <a href='#method.take_error' class='fnname'>take_error</a>(&amp;mut self) -&gt; <a class='enum' href='https://doc.rust-lang.org/nightly/core/option/enum.Option.html' title='core::option::Option'>Option</a>&lt;<a class='enum' href='../protocol_ftp_client/enum.FtpError.html' title='protocol_ftp_client::FtpError'>FtpError</a>&gt;</code></span></h4>
 <div class='docblock'><p>Returns tha last occurred error, and internally
-sets up <code>None</code></p>
+sets up <code>None</code>.</p>
 </div><h4 id='method.to_transmitter' class='method'><span id='to_transmitter.v' class='invisible'><code>fn <a href='#method.to_transmitter' class='fnname'>to_transmitter</a>(self) -&gt; <a class='struct' href='../protocol_ftp_client/struct.FtpTransmitter.html' title='protocol_ftp_client::FtpTransmitter'>FtpTransmitter</a></code></span></h4>
-<div class='docblock'><p>Sometimes you need manually advance to <code>Transmitter</code>
+<div class='docblock'><p>Sometimes you need to manually advance to <code>Transmitter</code>
 e.g. in case of Authorization Error, you can re-send
-other credentials</p>
+other credentials.</p>
 </div></div></section>
     <section id='search' class="content hidden"></section>
 
